@@ -98,7 +98,7 @@ async function showRiskModal(
   return new Promise((resolve) => {
     // Create modal overlay
     const overlay = document.createElement('div');
-    overlay.id = 'doman-risk-modal';
+    overlay.id = 'sifix-risk-modal';
     overlay.style.cssText = `
       position: fixed;
       top: 0;
@@ -182,7 +182,7 @@ async function showRiskModal(
           gap: 12px;
           margin-top: 24px;
         ">
-          <button id="doman-block-btn" style="
+          <button id="sifix-block-btn" style="
             flex: 1;
             padding: 12px;
             border: 2px solid #e5e7eb;
@@ -195,7 +195,7 @@ async function showRiskModal(
           ">
             Block Transaction
           </button>
-          <button id="doman-proceed-btn" style="
+          <button id="sifix-proceed-btn" style="
             flex: 1;
             padding: 12px;
             border: none;
@@ -225,12 +225,12 @@ async function showRiskModal(
     document.body.appendChild(overlay);
 
     // Event listeners
-    document.getElementById('doman-block-btn')?.addEventListener('click', () => {
+    document.getElementById('sifix-block-btn')?.addEventListener('click', () => {
       overlay.remove();
       resolve(false);
     });
 
-    document.getElementById('doman-proceed-btn')?.addEventListener('click', () => {
+    document.getElementById('sifix-proceed-btn')?.addEventListener('click', () => {
       overlay.remove();
       resolve(true);
     });

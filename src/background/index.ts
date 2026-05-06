@@ -5,6 +5,7 @@
 
 import { SecurityAgent } from "@sifix/agent"
 import type { Address, Hash } from "viem"
+import { scanAddress, reportThreat, getReputation } from "../lib/api-client"
 
 // Initialize agent
 let agent: SecurityAgent | null = null
@@ -88,6 +89,17 @@ async function handleSimulation(payload: {
   }
 
   try {
+    // Check recipient reputation first via API
+    let reputationData = null
+    if (tx.to) {
+      try {
+        reputationData = await getReputation(tx.to)
+        console.log("[SIFIX] Reputation check:", reputationData)
+      } catch (error) {
+        console.warn("[SIFIX] Reputation check failed:", error)
+      }
+    }
+
     // Initialize agent
     const securityAgent = await initAgent()
 
@@ -118,6 +130,34 @@ async function handleSimulation(payload: {
     }
     if (result.threatIntel) {
       warnings.push(`🚨 Known threat detected (score: ${result.threatIntel.riskScore}/100)`)
+    }
+
+    // Add reputation warning if low score
+    if (reputationData && reputationData.score < 30) {
+      warnings.push(`⚠️ Low reputation score: ${reputationData.score}/100`)
+    }
+
+    // Report threat to backend if HIGH or CRITICAL
+    if (riskScore >= 60 && tx.to) {
+      try {
+        await reportThreat({
+          address: tx.to,
+          severity: riskLevel as any,
+          type: "TRANSACTION_ANALYSIS",
+          description: result.analysis.reasoning || "High risk transaction detected",
+          evidence: {
+            from: tx.from,
+            to: tx.to,
+            value: tx.value,
+            data: tx.data,
+            riskScore: riskScore,
+            simulation: result.simulation
+          }
+        })
+        console.log("[SIFIX] Threat reported to backend")
+      } catch (error) {
+        console.error("[SIFIX] Failed to report threat:", error)
+      }
     }
 
     return {

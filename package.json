@@ -13,7 +13,7 @@
     "plasmo": "0.88.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "@sifix/agent": "workspace:*",
+    "@sifix/agent": "github:sifix-ai/sifix-agent",
     "viem": "^2.9.0"
   },
   "devDependencies": {

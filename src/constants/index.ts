@@ -7,12 +7,12 @@ export const MSG = {
   DISCONNECT_WALLET: "SIFIX_DISCONNECT_WALLET",
   SWITCH_CHAIN: "SIFIX_SWITCH_CHAIN",
 
-  // Scanning
+  // Scanning (via dApp API)
   CHECK_ADDRESS: "SIFIX_CHECK_ADDRESS",
   CHECK_DOMAIN: "SIFIX_CHECK_DOMAIN",
   SCAN_CONTRACT: "SIFIX_SCAN_CONTRACT",
 
-  // Tags & Voting
+  // Tags & Voting (via dApp API)
   GET_ADDRESS_TAGS: "SIFIX_GET_ADDRESS_TAGS",
   SUBMIT_ADDRESS_TAG: "SIFIX_SUBMIT_ADDRESS_TAG",
   VOTE_ADDRESS_TAG: "SIFIX_VOTE_ADDRESS_TAG",
@@ -29,11 +29,11 @@ export const MSG = {
   // Stats
   GET_STATS: "SIFIX_GET_STATS",
 
-  // Settings
+  // Settings (extension local only)
   GET_SETTINGS: "SIFIX_GET_SETTINGS",
   UPDATE_SETTINGS: "SIFIX_UPDATE_SETTINGS",
 
-  // Content → Background
+  // Content -> Background
   INPAGE_REQUEST: "SIFIX_INPAGE_REQUEST",
   INPAGE_EVENT: "SIFIX_INPAGE_EVENT",
 } as const
@@ -47,11 +47,11 @@ export const RISK_COLORS: Record<string, string> = {
 }
 
 export const RISK_LABELS: Record<string, string> = {
-  SAFE: "🟢 Safe",
-  LOW: "🔵 Low Risk",
-  MEDIUM: "🟡 Medium Risk",
-  HIGH: "🔴 High Risk",
-  CRITICAL: "🚨 Critical",
+  SAFE: "Safe",
+  LOW: "Low Risk",
+  MEDIUM: "Medium Risk",
+  HIGH: "High Risk",
+  CRITICAL: "Critical",
 }
 
 export const TAG_COLORS: Record<string, string> = {
@@ -73,9 +73,12 @@ export const CHAIN_NAMES: Record<number, string> = {
   16601: "0G Newton Mainnet",
 }
 
+// Default dApp API URL
+export const DEFAULT_DAPP_API = "http://localhost:3001/api/v1"
+
 export const DEFAULT_SETTINGS = {
   protectionEnabled: true,
   autoBlockHighRisk: false,
   notifications: true,
-  rpcUrl: "https://evmrpc-testnet.0g.ai",
+  dappApiUrl: "http://localhost:3001/api/v1",
 }

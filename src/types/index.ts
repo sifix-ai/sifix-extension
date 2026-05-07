@@ -102,12 +102,21 @@ export interface PlatformStats {
   blockedCount: number
 }
 
+// dApp connection settings - NO AI config here
 export interface ExtensionSettings {
   protectionEnabled: boolean
   autoBlockHighRisk: boolean
   notifications: boolean
-  rpcUrl: string
-  openaiKey?: string
+  dappApiUrl: string  // dApp backend URL
 }
 
 export type ActivePanel = "overview" | "scan" | "history" | "tag" | "settings"
+
+// dApp AI settings (read-only for extension display)
+export interface DappAiSettings {
+  walletAddress: string
+  aiProvider: string
+  hasCustomProvider: boolean
+  aiModel: string | null
+  hasApiKey: boolean
+}

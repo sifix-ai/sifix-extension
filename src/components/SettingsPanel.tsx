@@ -8,9 +8,7 @@ export function SettingsPanel() {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
 
-  useEffect(() => {
-    loadSettings()
-  }, [])
+  useEffect(() => { loadSettings() }, [])
 
   const loadSettings = async () => {
     try {
@@ -18,9 +16,7 @@ export function SettingsPanel() {
       if (resp?.data) {
         setSettings({ ...DEFAULT_SETTINGS, ...resp.data })
       }
-    } catch (e) {
-      console.error(e)
-    }
+    } catch (e) { console.error(e) }
   }
 
   const handleToggle = async (key: keyof ExtensionSettings) => {
@@ -49,94 +45,90 @@ export function SettingsPanel() {
     <div className="space-y-3 animate-slide-up">
       {/* Protection */}
       <div className="sifix-card">
-        <span className="text-xs text-sifix-muted uppercase tracking-wider block mb-3">
-          Protection
-        </span>
+        <span className="text-xs text-sifix-muted uppercase tracking-wider block mb-3">Protection</span>
 
         <ToggleRow
-          label="🛡️ Protection Enabled"
+          label="Protection Enabled"
           desc="Intercept transactions on dApps"
           checked={settings.protectionEnabled}
           onChange={() => handleToggle("protectionEnabled")}
         />
         <ToggleRow
-          label="🚫 Auto-block High Risk"
+          label="Auto-block High Risk"
           desc="Automatically block HIGH/CRITICAL transactions"
           checked={settings.autoBlockHighRisk}
           onChange={() => handleToggle("autoBlockHighRisk")}
         />
         <ToggleRow
-          label="🔔 Notifications"
+          label="Notifications"
           desc="Show notifications for blocked transactions"
           checked={settings.notifications}
           onChange={() => handleToggle("notifications")}
         />
       </div>
 
-      {/* Network */}
+      {/* dApp Connection */}
       <div className="sifix-card">
-        <span className="text-xs text-sifix-muted uppercase tracking-wider block mb-3">
-          Network
-        </span>
+        <span className="text-xs text-sifix-muted uppercase tracking-wider block mb-3">dApp Connection</span>
+        <p className="text-[10px] text-sifix-muted/60 mb-3">
+          AI config is managed in the dApp dashboard. Extension connects to dApp API for all analysis.
+        </p>
 
         <div className="mb-2">
-          <label className="text-[10px] text-sifix-muted block mb-1">RPC URL</label>
+          <label className="text-[10px] text-sifix-muted block mb-1">dApp API URL</label>
           <input
             type="text"
-            value={settings.rpcUrl}
-            onChange={(e) => handleInputChange("rpcUrl", e.target.value)}
+            value={settings.dappApiUrl}
+            onChange={(e) => handleInputChange("dappApiUrl", e.target.value)}
             className="w-full bg-sifix-surface border border-sifix-border rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-sifix-primary/50"
           />
         </div>
 
-        <div>
-          <label className="text-[10px] text-sifix-muted block mb-1">OpenAI API Key (optional)</label>
-          <input
-            type="password"
-            value={settings.openaiKey || ""}
-            onChange={(e) => handleInputChange("openaiKey", e.target.value)}
-            placeholder="sk-..."
-            className="w-full bg-sifix-surface border border-sifix-border rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-sifix-primary/50"
-          />
-        </div>
+        <a
+          href={settings.dappApiUrl.replace("/api/v1", "/dashboard/settings")}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full mt-2 py-2 rounded-lg text-xs font-medium bg-sifix-primary/10 border border-sifix-primary/30 text-sifix-primary text-center hover:bg-sifix-primary/20 transition-all"
+        >
+          Open dApp Settings (Configure AI Provider)
+        </a>
 
         <button
           onClick={handleSave}
-          className="w-full mt-3 py-2 rounded-lg text-xs font-medium bg-sifix-primary hover:bg-sifix-primary-dark text-white transition-all"
+          className="w-full mt-2 py-2 rounded-lg text-xs font-medium bg-sifix-primary hover:bg-sifix-primary-dark text-white transition-all"
         >
           Save Settings
         </button>
 
         {saved && (
           <p className="text-[10px] text-sifix-safe text-center mt-1 animate-slide-up">
-            ✓ Settings saved
+            Settings saved
           </p>
         )}
       </div>
 
-      {/* About */}
+      {/* Architecture Info */}
       <div className="sifix-card text-center">
-        <span className="text-2xl">🛡️</span>
+        <span className="text-2xl">&#x1F6E1;&#xFE0F;</span>
         <p className="text-xs font-bold text-white mt-1">SIFIX Extension</p>
-        <p className="text-[10px] text-sifix-muted">v0.1.0 · Built by Mula Labs</p>
-        <p className="text-[10px] text-sifix-muted/60 mt-1">
-          AI-Powered Wallet Security for Web3
-        </p>
+        <p className="text-[10px] text-sifix-muted">v0.2.0 - Built by Mula Labs</p>
+
+        <div className="mt-3 p-2 bg-sifix-surface rounded-lg text-left">
+          <p className="text-[10px] text-sifix-muted font-semibold mb-1">Architecture:</p>
+          <p className="text-[9px] text-sifix-muted/60">Extension (UI) &rarr; dApp API (Backend) &rarr; AI Provider</p>
+          <p className="text-[9px] text-sifix-muted/60 mt-1">AI Provider configured in dApp dashboard:</p>
+          <p className="text-[9px] text-sifix-muted/60">&#x2022; 0G Compute (decentralized, pay with 0G)</p>
+          <p className="text-[9px] text-sifix-muted/60">&#x2022; OpenAI / Groq (bring your own key)</p>
+          <p className="text-[9px] text-sifix-muted/60">&#x2022; Ollama (local, free)</p>
+          <p className="text-[9px] text-sifix-muted/60">&#x2022; Custom endpoint</p>
+        </div>
       </div>
     </div>
   )
 }
 
-function ToggleRow({
-  label,
-  desc,
-  checked,
-  onChange,
-}: {
-  label: string
-  desc: string
-  checked: boolean
-  onChange: () => void
+function ToggleRow({ label, desc, checked, onChange }: {
+  label: string; desc: string; checked: boolean; onChange: () => void
 }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-sifix-border/50 last:border-0">

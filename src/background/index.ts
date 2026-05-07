@@ -66,6 +66,7 @@ async function handleSimulation(payload: {
   warnings: string[]
   gasEstimate?: string
   riskScore?: number
+  storageRootHash?: string
 }> {
   const { method, params } = payload
 
@@ -165,7 +166,8 @@ async function handleSimulation(payload: {
       riskScore: riskScore,
       analysis: result.analysis.reasoning || "Transaction analyzed successfully.",
       warnings: warnings.length > 0 ? warnings : ["No major risks detected"],
-      gasEstimate: tx.gas
+      gasEstimate: tx.gas,
+      storageRootHash: result.storageRootHash
     }
   } catch (error) {
     console.error("[SIFIX] Agent analysis failed:", error)

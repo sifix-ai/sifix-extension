@@ -237,6 +237,20 @@ async function showInterceptionPopup(
           </div>
 
           ${
+            response.storageRootHash
+              ? `
+            <div style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+              <div style="color: #667eea; font-weight: 600; margin-bottom: 12px;">🔗 0G Storage Proof</div>
+              <div style="color: #cbd5e0; font-size: 13px; margin-bottom: 8px;">Analysis stored on 0G Storage</div>
+              <a href="https://explorer.0g.ai/storage/${response.storageRootHash}" target="_blank" style="display: inline-block; padding: 8px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-size: 13px; font-weight: 600;">
+                📊 View Proof on Explorer
+              </a>
+            </div>
+          `
+              : ""
+          }
+
+          ${
             response.warnings && response.warnings.length > 0
               ? `
             <div style="background: rgba(245, 87, 108, 0.1); border: 1px solid rgba(245, 87, 108, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 24px;">

@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    width: 380px;
+    min-height: 540px;
+    margin: 0;
+    padding: 0;
+    background-color: #07080a;
+    color: #e5e7eb;
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+@layer utilities {
+  .sifix-card {
+    @apply bg-sifix-card border border-sifix-border rounded-xl p-3;
+  }
+  .sifix-gradient {
+    @apply bg-gradient-to-br from-sifix-primary to-sifix-primary-dark;
+  }
+  .sifix-glow {
+    box-shadow: 0 0 12px rgba(255,99,99,0.4);
+  }
+  .sifix-spinner {
+    @apply w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin;
+  }
+}

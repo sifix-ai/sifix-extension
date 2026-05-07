@@ -1,247 +1,295 @@
 /**
- * Background Service Worker
- * Handles transaction simulation and AI analysis
+ * SIFIX Background Service Worker
+ * Handles messaging between popup, content scripts, and APIs
  */
 
-import { SecurityAgent } from "@sifix/agent"
-import type { Address, Hash } from "viem"
-import { scanAddress, reportThreat, getReputation } from "../lib/api-client"
+import { MSG, DEFAULT_SETTINGS, CHAIN_NAMES } from "../constants"
+import type { WalletState, ExtensionSettings } from "../types"
 
-// Initialize agent
-let agent: SecurityAgent | null = null
+// ─── State ──────────────────────────────────────────
+let walletState: WalletState = { address: null, chainId: null, connected: false, balance: null }
+let settings: ExtensionSettings = { ...DEFAULT_SETTINGS }
 
-async function initAgent() {
-  if (!agent) {
-    agent = new SecurityAgent({
-      rpcUrl: process.env.PLASMO_PUBLIC_RPC_URL || "https://evmrpc-testnet.0g.ai",
-      openaiApiKey: process.env.PLASMO_PUBLIC_OPENAI_API_KEY || "",
-      zeroGStorageUrl: process.env.PLASMO_PUBLIC_ZEROG_STORAGE_URL || ""
-    })
-  }
-  return agent
-}
+// ─── Init ───────────────────────────────────────────
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.local.set({ settings, walletState })
+  console.log("[SIFIX] Extension installed")
+})
 
-// Message handler
+// Load persisted state
+chrome.storage.local.get(["walletState", "settings"], (result) => {
+  if (result.walletState) walletState = result.walletState
+  if (result.settings) settings = { ...DEFAULT_SETTINGS, ...result.settings }
+})
+
+// ─── Message Handler ────────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "SIMULATE_TRANSACTION") {
-    handleSimulation(message.payload)
-      .then(sendResponse)
-      .catch((error) => {
-        console.error("[SIFIX] Simulation error:", error)
-        sendResponse({
-          risk: "UNKNOWN",
-          analysis: "Simulation failed. Proceed with caution.",
-          warnings: [error.message]
-        })
-      })
-    return true // Keep channel open for async response
-  }
+  switch (message.type) {
 
-  if (message.type === "QUERY_REPUTATION") {
-    handleReputationQuery(message.payload)
-      .then(sendResponse)
-      .catch((error) => {
-        console.error("[SIFIX] Reputation query error:", error)
-        sendResponse({ risk: "UNKNOWN", score: 0 })
+    // ─── Wallet ──────────────────────────────
+    case MSG.GET_WALLET_STATE: {
+      chrome.storage.local.get("walletState", (r) => {
+        sendResponse({ data: r.walletState || walletState })
       })
-    return true
-  }
+      return true
+    }
 
-  if (message.type === "GET_CHAIN_ID") {
-    // Return chain ID from active tab
-    sendResponse({ chainId: 16600 }) // 0G testnet
-    return true
+    case MSG.CONNECT_WALLET: {
+      handleConnectWallet(sender)
+        .then((state) => sendResponse({ data: state }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    case MSG.DISCONNECT_WALLET: {
+      walletState = { address: null, chainId: null, connected: false, balance: null }
+      chrome.storage.local.set({ walletState })
+      sendResponse({ data: walletState })
+      return false
+    }
+
+    // ─── Scanning ────────────────────────────
+    case MSG.CHECK_ADDRESS: {
+      handleCheckAddress(message.address)
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    case MSG.CHECK_DOMAIN: {
+      handleCheckDomain(message.domain)
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    case MSG.SCAN_CONTRACT: {
+      handleScanContract(message.address)
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    // ─── Tags & Voting ──────────────────────
+    case MSG.GET_ADDRESS_TAGS: {
+      handleGetTags(message.address)
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    case MSG.SUBMIT_ADDRESS_TAG: {
+      handleSubmitTag(message.payload)
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    case MSG.VOTE_ADDRESS_TAG: {
+      handleVoteTag(message.tagId, message.direction)
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    // ─── Transactions ────────────────────────
+    case MSG.GET_RECENT_TXS: {
+      handleGetRecentTxs(message.limit || 20)
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    // ─── Page Status ─────────────────────────
+    case MSG.GET_PAGE_STATUS: {
+      handleGetPageStatus(sender)
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    // ─── Settings ────────────────────────────
+    case MSG.GET_SETTINGS: {
+      sendResponse({ data: settings })
+      return false
+    }
+
+    case MSG.UPDATE_SETTINGS: {
+      settings = { ...settings, ...message.settings }
+      chrome.storage.local.set({ settings })
+      sendResponse({ data: settings })
+      return false
+    }
+
+    // ─── Stats ───────────────────────────────
+    case MSG.GET_STATS: {
+      handleGetStats()
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    default:
+      return false
   }
 })
 
-/**
- * Handle transaction simulation
- */
-async function handleSimulation(payload: {
-  method: string
-  params: any[]
-}): Promise<{
-  risk: string
-  analysis: string
-  warnings: string[]
-  gasEstimate?: string
-  riskScore?: number
-  storageRootHash?: string
-}> {
-  const { method, params } = payload
+// ─── Handlers ───────────────────────────────────────
 
-  console.log("[SIFIX] Starting simulation:", method)
+async function handleConnectWallet(sender: chrome.runtime.MessageSender): Promise<WalletState> {
+  // Get active tab
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.id) throw new Error("No active tab")
 
-  // Extract transaction data
-  const tx = method === "eth_sendTransaction" ? params[0] : null
+  // Inject script to connect wallet via window.ethereum
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: "MAIN",
+    func: () => {
+      return new Promise((resolve) => {
+        if (!window.ethereum) {
+          resolve({ error: "No wallet detected. Install MetaMask or another Web3 wallet." })
+          return
+        }
+        window.ethereum
+          .request({ method: "eth_requestAccounts" })
+          .then((accounts: string[]) => {
+            const chainId = window.ethereum.chainId
+            resolve({
+              address: accounts[0] || null,
+              chainId: chainId ? parseInt(chainId, 16) : null,
+              connected: true,
+            })
+          })
+          .catch((err: any) => resolve({ error: err.message }))
+      })
+    },
+  })
 
-  if (!tx) {
-    // For signature requests, do basic analysis
-    return {
-      risk: "MEDIUM",
-      riskScore: 50,
-      analysis:
-        "This is a signature request. Make sure you trust the dApp before signing.",
-      warnings: [
-        "Signatures can authorize token transfers",
-        "Always verify the message content"
-      ]
-    }
+  const result = results?.[0]?.result as any
+  if (result?.error) throw new Error(result.error)
+
+  walletState = {
+    address: result.address,
+    chainId: result.chainId,
+    connected: result.connected,
+    balance: null,
   }
 
-  try {
-    // Check recipient reputation first via API
-    let reputationData = null
-    if (tx.to) {
-      try {
-        reputationData = await getReputation(tx.to)
-        console.log("[SIFIX] Reputation check:", reputationData)
-      } catch (error) {
-        console.warn("[SIFIX] Reputation check failed:", error)
+  // Get balance
+  if (walletState.address) {
+    try {
+      const balance = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: "MAIN",
+        func: (addr: string) => {
+          return window.ethereum.request({
+            method: "eth_getBalance",
+            params: [addr, "latest"],
+          })
+        },
+        args: [walletState.address],
+      })
+      const bal = balance?.[0]?.result as string
+      if (bal) {
+        walletState.balance = (parseInt(bal, 16) / 1e18).toFixed(4)
       }
-    }
+    } catch {}
+  }
 
-    // Initialize agent
-    const securityAgent = await initAgent()
+  chrome.storage.local.set({ walletState })
+  return walletState
+}
 
-    // Run full analysis
-    const result = await securityAgent.analyzeTransaction({
-      from: tx.from as Address,
-      to: tx.to as Address,
-      data: (tx.data || "0x") as Hash,
-      value: tx.value ? BigInt(tx.value) : BigInt(0)
-    })
-
-    // Map risk score to risk level
-    const riskScore = result.analysis.riskScore
-    let riskLevel: string
-    if (riskScore >= 80) riskLevel = "CRITICAL"
-    else if (riskScore >= 60) riskLevel = "HIGH"
-    else if (riskScore >= 40) riskLevel = "MEDIUM"
-    else if (riskScore >= 20) riskLevel = "LOW"
-    else riskLevel = "SAFE"
-
-    // Extract warnings from analysis
-    const warnings: string[] = []
-    if (result.analysis.recommendation === "BLOCK") {
-      warnings.push("⛔ Transaction blocked by AI analysis")
-    }
-    if (!result.simulation.success) {
-      warnings.push("⚠️ Simulation failed - transaction may revert")
-    }
-    if (result.threatIntel) {
-      warnings.push(`🚨 Known threat detected (score: ${result.threatIntel.riskScore}/100)`)
-    }
-
-    // Add reputation warning if low score
-    if (reputationData && reputationData.score < 30) {
-      warnings.push(`⚠️ Low reputation score: ${reputationData.score}/100`)
-    }
-
-    // Report threat to backend if HIGH or CRITICAL
-    if (riskScore >= 60 && tx.to) {
-      try {
-        await reportThreat({
-          address: tx.to,
-          severity: riskLevel as any,
-          type: "TRANSACTION_ANALYSIS",
-          description: result.analysis.reasoning || "High risk transaction detected",
-          evidence: {
-            from: tx.from,
-            to: tx.to,
-            value: tx.value,
-            data: tx.data,
-            riskScore: riskScore,
-            simulation: result.simulation
-          }
-        })
-        console.log("[SIFIX] Threat reported to backend")
-      } catch (error) {
-        console.error("[SIFIX] Failed to report threat:", error)
-      }
-    }
-
-    return {
-      risk: riskLevel,
-      riskScore: riskScore,
-      analysis: result.analysis.reasoning || "Transaction analyzed successfully.",
-      warnings: warnings.length > 0 ? warnings : ["No major risks detected"],
-      gasEstimate: tx.gas,
-      storageRootHash: result.storageRootHash
-    }
-  } catch (error) {
-    console.error("[SIFIX] Agent analysis failed:", error)
-
-    // Fallback: basic heuristic analysis
-    const warnings: string[] = []
-
-    // Check for high value transfer
-    if (tx.value && parseInt(tx.value, 16) > 1e18) {
-      warnings.push("High value transfer detected (>1 ETH)")
-    }
-
-    // Check for contract interaction
-    if (tx.data && tx.data !== "0x") {
-      warnings.push("Contract interaction detected")
-    }
-
-    // Check for unknown recipient
-    if (tx.to && !isKnownContract(tx.to)) {
-      warnings.push("Recipient address is not a known contract")
-    }
-
-    return {
-      risk: warnings.length > 1 ? "HIGH" : "MEDIUM",
-      riskScore: warnings.length > 1 ? 70 : 50,
-      analysis:
-        "Basic security check completed. " +
-        (warnings.length > 0
-          ? "Some risks detected."
-          : "No obvious risks found."),
-      warnings
-    }
+async function handleCheckAddress(address: string) {
+  // TODO: Connect to SIFIX API + GoPlus
+  // For now return mock data
+  const isKnown = address.toLowerCase().startsWith("0x")
+  return {
+    address,
+    inputType: "address",
+    riskScore: 25,
+    riskLevel: "LOW",
+    isVerified: false,
+    reportCount: 0,
+    tags: [],
   }
 }
 
-/**
- * Handle reputation query
- */
-async function handleReputationQuery(payload: { address: string }): Promise<{
-  risk: string
-  score: number
-  reports?: number
-}> {
-  const { address } = payload
+async function handleCheckDomain(domain: string) {
+  // TODO: Connect to SIFIX API
+  // For now return mock
+  return {
+    domain,
+    isScam: false,
+    riskScore: 10,
+    category: "unchecked",
+    reason: "Domain not yet checked by community",
+  }
+}
 
+async function handleScanContract(address: string) {
+  // TODO: Connect to SIFIX agent for bytecode analysis
+  return {
+    address,
+    riskScore: 30,
+    level: "unknown",
+    checks: [
+      { key: "verified", label: "Contract Verified", status: "unknown", reason: "Not checked yet" },
+      { key: "honeypot", label: "Honeypot Check", status: "safe", reason: "No honeypot patterns detected" },
+      { key: "ownership", label: "Ownership Risk", status: "unknown", reason: "Not checked yet" },
+    ],
+  }
+}
+
+async function handleGetTags(address: string) {
+  // TODO: Query from SIFIX API + 0G Storage
+  return []
+}
+
+async function handleSubmitTag(payload: any) {
+  // TODO: Submit to SIFIX API + on-chain via ScamReporter contract
+  console.log("[SIFIX] Tag submitted:", payload)
+  return { success: true, tag: payload }
+}
+
+async function handleVoteTag(tagId: string, direction: "up" | "down") {
+  // TODO: Submit vote to SIFIX API + on-chain
+  return { success: true, tagId, direction }
+}
+
+async function handleGetRecentTxs(limit: number) {
+  // Read from IndexedDB in background context
   try {
-    // TODO: Query on-chain reputation contract
-    // For now, return unknown
-    return {
-      risk: "UNKNOWN",
-      score: 0
-    }
-  } catch (error) {
-    console.error("[SIFIX] Reputation query failed:", error)
-    return {
-      risk: "UNKNOWN",
-      score: 0
-    }
+    const { getRecentTransactions } = await import("../lib/db")
+    return await getRecentTransactions(limit)
+  } catch {
+    return []
   }
 }
 
-/**
- * Check if address is a known contract
- */
-function isKnownContract(address: string): boolean {
-  const knownContracts = [
-    "0x7a250d5630b4cf539739df2c5dacb4c659f2488d", // Uniswap V2 Router
-    "0xe592427a0aece92de3edee1f18e0157c05861564", // Uniswap V3 Router
-    "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45", // Uniswap Universal Router
-    "0x1111111254eeb25477b68fb85ed929f73a960582", // 1inch Router
-    "0xdef1c0ded9bec7f1a1670819833240f027b25eff" // 0x Exchange Proxy
-  ]
+async function handleGetPageStatus(sender: chrome.runtime.MessageSender) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    const url = tab?.url || ""
+    const domain = url ? new URL(url).hostname : ""
 
-  return knownContracts.includes(address.toLowerCase())
+    // TODO: Check domain against local blacklist + SIFIX API
+    return {
+      safety: "unknown" as const,
+      reason: "Not yet checked",
+      domain,
+    }
+  } catch {
+    return { safety: "unknown", reason: "", domain: "" }
+  }
 }
 
-console.log("[SIFIX] Background worker initialized with SecurityAgent ✅")
+async function handleGetStats() {
+  try {
+    const { getTxStats } = await import("../lib/db")
+    return await getTxStats()
+  } catch {
+    return { total: 0, approved: 0, blocked: 0, simulated: 0 }
+  }
+}

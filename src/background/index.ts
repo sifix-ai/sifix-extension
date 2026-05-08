@@ -14,7 +14,34 @@ let settings: ExtensionSettings = { ...DEFAULT_SETTINGS }
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({ settings, walletState })
   console.log("[SIFIX] Extension installed")
+  registerTxInterceptor()
 })
+
+// Register MAIN world content script on startup too
+registerTxInterceptor()
+
+/**
+ * Register the tx-interceptor as a MAIN world content script.
+ * Plasmo v0.88 doesn't properly register world:"MAIN" scripts in manifest,
+ * so we register it programmatically via chrome.scripting API.
+ */
+async function registerTxInterceptor() {
+  try {
+    // Unregister first to avoid duplicates
+    await chrome.scripting.unregisterContentScripts({ ids: ["sifix-tx-interceptor"] }).catch(() => {})
+    
+    await chrome.scripting.registerContentScripts([{
+      id: "sifix-tx-interceptor",
+      matches: ["http://*/*", "https://*/*"],
+      js: ["tx-interceptor.js"],
+      world: "MAIN" as any,
+      runAt: "document_start" as any,
+    }])
+    console.log("[SIFIX] TX interceptor registered (MAIN world)")
+  } catch (err) {
+    console.error("[SIFIX] Failed to register tx-interceptor:", err)
+  }
+}
 
 // Load persisted state
 chrome.storage.local.get(["walletState", "settings"], (result) => {

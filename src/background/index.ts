@@ -33,7 +33,7 @@ async function registerTxInterceptor() {
     await chrome.scripting.registerContentScripts([{
       id: "sifix-tx-interceptor",
       matches: ["http://*/*", "https://*/*"],
-      js: ["tx-interceptor.js"],
+      js: ["static/tx-interceptor.js"],
       world: "MAIN" as any,
       runAt: "document_start" as any,
     }])

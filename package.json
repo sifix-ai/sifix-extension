@@ -6,7 +6,7 @@
   "author": "Mula Labs",
   "scripts": {
     "dev": "plasmo dev",
-    "build": "plasmo build && cp static/tx-interceptor.js build/chrome-mv3-prod/tx-interceptor.js",
+    "build": "plasmo build && mkdir -p build/chrome-mv3-prod/static && cp static/tx-interceptor.js build/chrome-mv3-prod/static/tx-interceptor.js",
     "package": "plasmo package"
   },
   "dependencies": {

@@ -129,6 +129,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true
     }
 
+    // ─── Extension Auth (Sign Message) ───────
+    case "SIFIX_AUTH_SIGN": {
+      handleAuthSign(message.walletAddress, message.message)
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
+    case "SIFIX_AUTH_CONNECT": {
+      handleAuthConnect()
+        .then((data) => sendResponse({ data }))
+        .catch((err) => sendResponse({ error: err.message }))
+      return true
+    }
+
     default:
       return false
   }
@@ -292,4 +307,63 @@ async function handleGetStats() {
   } catch {
     return { total: 0, approved: 0, blocked: 0, simulated: 0 }
   }
+}
+
+/**
+ * Get wallet accounts from active tab (where MetaMask is injected)
+ */
+async function handleAuthConnect(): Promise<{ accounts: string[] }> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.id) throw new Error("No active tab")
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: "MAIN",
+    func: () => {
+      return new Promise((resolve) => {
+        if (!window.ethereum) {
+          resolve({ error: "No wallet detected. Install MetaMask." })
+          return
+        }
+        window.ethereum
+          .request({ method: "eth_requestAccounts" })
+          .then((accounts: string[]) => resolve({ accounts }))
+          .catch((err: any) => resolve({ error: err.message }))
+      })
+    },
+  })
+
+  const result = results?.[0]?.result as any
+  if (result?.error) throw new Error(result.error)
+  return { accounts: result.accounts }
+}
+
+/**
+ * Sign a message via MetaMask in the active tab
+ */
+async function handleAuthSign(walletAddress: string, message: string): Promise<{ signature: string }> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.id) throw new Error("No active tab")
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: "MAIN",
+    func: (addr: string, msg: string) => {
+      return new Promise((resolve) => {
+        if (!window.ethereum) {
+          resolve({ error: "No wallet detected" })
+          return
+        }
+        window.ethereum
+          .request({ method: "personal_sign", params: [msg, addr] })
+          .then((signature: string) => resolve({ signature }))
+          .catch((err: any) => resolve({ error: err.message }))
+      })
+    },
+    args: [walletAddress, message],
+  })
+
+  const result = results?.[0]?.result as any
+  if (result?.error) throw new Error(result.error)
+  return { signature: result.signature }
 }

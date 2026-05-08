@@ -4,6 +4,21 @@ interface ConnectScreenProps {
   onConnected: (walletAddress: string) => void
 }
 
+// Send message to background script (which has access to active tab's window.ethereum)
+function sendToBackground(type: string, payload?: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ type, ...payload }, (response) => {
+      if (response?.error) {
+        reject(new Error(response.error))
+      } else if (response?.data) {
+        resolve(response.data)
+      } else {
+        reject(new Error("No response from background"))
+      }
+    })
+  })
+}
+
 export function ConnectScreen({ onConnected }: ConnectScreenProps) {
   const [status, setStatus] = useState<"idle" | "connecting" | "signing" | "verifying" | "error">("idle")
   const [error, setError] = useState<string>("")
@@ -13,24 +28,16 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
     setError("")
 
     try {
-      // Check if MetaMask/wallet is available
-      if (!window.ethereum) {
-        throw new Error("No wallet detected. Please install MetaMask.")
-      }
-
-      // Request wallet connection
-      const accounts = await window.ethereum.request({
-        method: "eth_requestAccounts",
-      })
+      // Step 1: Get accounts via background → active tab → window.ethereum
+      const { accounts } = await sendToBackground("SIFIX_AUTH_CONNECT")
 
       if (!accounts || accounts.length === 0) {
-        throw new Error("No accounts found")
+        throw new Error("No accounts found in wallet")
       }
 
       const walletAddress = accounts[0]
 
-      // Get nonce from dApp
-      setStatus("signing")
+      // Step 2: Get nonce from dApp
       const { getNonce, verifySignature, setToken } = await import("../lib/api-client")
       const nonceResp = await getNonce(walletAddress)
 
@@ -38,13 +45,18 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
         throw new Error("Failed to get auth nonce from dApp")
       }
 
-      // Ask user to sign the message
-      const signature = await window.ethereum.request({
-        method: "personal_sign",
-        params: [nonceResp.message, walletAddress],
+      // Step 3: Sign message via background → active tab → window.ethereum
+      setStatus("signing")
+      const { signature } = await sendToBackground("SIFIX_AUTH_SIGN", {
+        walletAddress,
+        message: nonceResp.message,
       })
 
-      // Verify signature with dApp
+      if (!signature) {
+        throw new Error("Failed to sign message")
+      }
+
+      // Step 4: Verify signature with dApp API
       setStatus("verifying")
       const verifyResp = await verifySignature({
         walletAddress,
@@ -53,10 +65,10 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
       })
 
       if (!verifyResp.success || !verifyResp.token) {
-        throw new Error(verifyResp.error || "Signature verification failed")
+        throw new Error("Signature verification failed")
       }
 
-      // Store token
+      // Step 5: Store token
       await setToken(verifyResp.token)
       chrome.storage.local.set({ sifix_wallet: verifyResp.walletAddress })
 
@@ -66,7 +78,6 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
       setStatus("error")
       setError(err.message || "Connection failed")
 
-      // Reset to idle after showing error
       setTimeout(() => {
         setStatus("idle")
         setError("")
@@ -133,7 +144,7 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
         {isConnecting ? statusText[status] : "Connect to SIFIX"}
       </button>
 
-      {/* Status */}
+      {/* Spinner */}
       {isConnecting && (
         <div style={{
           fontSize: "12px",

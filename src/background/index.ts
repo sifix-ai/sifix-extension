@@ -19,17 +19,21 @@ chrome.runtime.onInstalled.addListener(() => {
 // ─── Early TX Interceptor Injection ─────────────────
 // Inject our Proxy into pages BEFORE any other scripts run.
 // This ensures we hook window.ethereum before dApps capture a reference.
-chrome.webNavigation?.onCommitted?.addListener((details) => {
+function maybeInjectInterceptor(details: chrome.webNavigation.WebNavigationCallbackDetails) {
   if (details.frameId !== 0) return // only main frame
-  if (!details.url.startsWith("http")) return // skip chrome:// etc
+  if (!details.url || !details.url.startsWith("http")) return // skip chrome:// etc
 
   chrome.scripting.executeScript({
     target: { tabId: details.tabId },
     files: ["tx-interceptor.js"],
     world: "MAIN" as any,
     injectImmediately: true,
-  }).catch(() => {})
-})
+  }).catch(() => { })
+}
+
+chrome.webNavigation?.onBeforeNavigate?.addListener(maybeInjectInterceptor)
+chrome.webNavigation?.onCommitted?.addListener(maybeInjectInterceptor)
+chrome.webNavigation?.onHistoryStateUpdated?.addListener(maybeInjectInterceptor)
 
 // Load persisted state
 chrome.storage.local.get(["walletState", "settings"], (result) => {
@@ -209,7 +213,7 @@ async function handleConnectWallet(sender: chrome.runtime.MessageSender): Promis
       if (bal) {
         walletState.balance = (parseInt(bal, 16) / 1e18).toFixed(4)
       }
-    } catch {}
+    } catch { }
   }
 
   chrome.storage.local.set({ walletState })

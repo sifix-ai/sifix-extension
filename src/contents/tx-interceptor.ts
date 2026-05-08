@@ -36,7 +36,7 @@ interface AnalysisResult {
   error?: string
 }
 
-const TX_METHODS = ["eth_sendTransaction", "eth_signTransaction"]
+const TX_METHODS = ["eth_sendTransaction", "eth_signTransaction", "eth_sendRawTransaction", "wallet_sendCalls"]
 const SIGN_METHODS = [
   "personal_sign",
   "eth_sign",
@@ -46,13 +46,8 @@ const SIGN_METHODS = [
   "eth_getEncryptionPublicKey",
   "eth_decrypt",
 ]
-const WALLET_METHODS = [
-  "eth_requestAccounts",
-  "wallet_requestPermissions",
-  "wallet_addEthereumChain",
-  "wallet_switchEthereumChain",
-  "wallet_watchAsset",
-]
+// Note: intentionally not intercepting wallet/utility methods
+// like balance or chain checks to avoid false simulations.
 
 let bridgeReady = false
 
@@ -210,9 +205,7 @@ function injectProxy(original: any): boolean {
             const { method, params = [] } = args
             const isTx = TX_METHODS.includes(method)
             const isSign = SIGN_METHODS.includes(method)
-            const isWallet = WALLET_METHODS.includes(method) || method.startsWith("wallet_")
-
-            if (isTx || isSign || isWallet) {
+            if (isTx || isSign) {
               console.log("[SIFIX] Intercepted:", method)
               const tx: TxRequest = isTx ? (params[0] || {}) : {}
               const hideLoading = showLoading()

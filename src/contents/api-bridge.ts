@@ -17,7 +17,7 @@ export const config: PlasmoCSConfig = {
   // No "world: MAIN" = runs in ISOLATED world with chrome API access
 }
 
-const DEFAULT_API = "http://localhost:3001/api/v1"
+const DEFAULT_API = "http://localhost:3000/api/v1"
 
 async function getApiBase(): Promise<string> {
   try {

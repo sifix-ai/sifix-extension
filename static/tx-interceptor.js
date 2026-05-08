@@ -15,7 +15,7 @@
   if (window.__SIFIX_INTERCEPTOR_ACTIVE) return
   window.__SIFIX_INTERCEPTOR_ACTIVE = true
 
-  var TX_METHODS = ["eth_sendTransaction", "eth_signTransaction"]
+  var TX_METHODS = ["eth_sendTransaction", "eth_signTransaction", "eth_sendRawTransaction", "wallet_sendCalls"]
   var SIGN_METHODS = [
     "personal_sign",
     "eth_sign",
@@ -25,14 +25,6 @@
     "eth_getEncryptionPublicKey",
     "eth_decrypt"
   ]
-  var WALLET_METHODS = [
-    "eth_requestAccounts",
-    "wallet_requestPermissions",
-    "wallet_addEthereumChain",
-    "wallet_switchEthereumChain",
-    "wallet_watchAsset"
-  ]
-
   var bridgeReady = false
 
   window.addEventListener("message", function (event) {
@@ -258,9 +250,7 @@
               var params = args.params || []
               var isTx = TX_METHODS.indexOf(method) !== -1
               var isSign = SIGN_METHODS.indexOf(method) !== -1
-              var isWallet = WALLET_METHODS.indexOf(method) !== -1 || (method && method.indexOf("wallet_") === 0)
-
-              if (isTx || isSign || isWallet) {
+              if (isTx || isSign) {
                 console.log("[SIFIX] ⚡ Intercepted:", method, params)
 
                 var tx = isTx ? (params[0] || {}) : {}

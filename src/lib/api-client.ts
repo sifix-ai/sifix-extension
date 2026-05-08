@@ -4,7 +4,7 @@
  */
 
 // Default — overridden by settings from chrome.storage
-let API_BASE = "http://localhost:3001/api/v1"
+let API_BASE = "http://localhost:3000/api/v1"
 
 // Load saved API base on init
 ;(async () => {

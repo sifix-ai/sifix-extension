@@ -4,7 +4,7 @@ import { getSettings, updateSettings } from "../lib/messaging"
 import { DEFAULT_SETTINGS } from "../constants"
 import { cn } from "../utils/cn"
 
-export function SettingsPanel() {
+export function SettingsPanel({ onDisconnect, connectedWallet }: { onDisconnect?: () => void; connectedWallet?: string | null }) {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
 
@@ -106,6 +106,20 @@ export function SettingsPanel() {
           </p>
         )}
       </div>
+
+      {/* Auth Info + Disconnect */}
+      {connectedWallet && onDisconnect && (
+        <div className="sifix-card">
+          <span className="text-xs text-sifix-muted uppercase tracking-wider block mb-3">Connected Wallet</span>
+          <p className="text-xs text-white font-mono mb-3">{connectedWallet}</p>
+          <button
+            onClick={onDisconnect}
+            className="w-full py-2 rounded-lg text-xs font-medium bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all"
+          >
+            Disconnect from SIFIX
+          </button>
+        </div>
+      )}
 
       {/* Architecture Info */}
       <div className="sifix-card text-center">

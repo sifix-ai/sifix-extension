@@ -1,5 +1,7 @@
 // Extension content script - intercepts wallet transactions
 
+import process from "process";
+
 interface TransactionRequest {
   from: string;
   to: string;
@@ -15,7 +17,7 @@ interface RiskAnalysis {
   recommendation: 'BLOCK' | 'WARN' | 'ALLOW';
 }
 
-const API_URL = 'http://localhost:3001';
+const API_URL = process.env.PLASMO_PUBLIC_DAPP_API_URL || "http://localhost:3000/api/v1";
 
 /**
  * Intercept wallet provider requests
@@ -24,7 +26,7 @@ function interceptWalletProvider() {
   const originalRequest = window.ethereum?.request;
   
   if (!originalRequest) {
-    console.warn('[DOMAN] No wallet provider found');
+    console.warn('[SIFIX] No wallet provider found');
     return;
   }
 
@@ -36,7 +38,7 @@ function interceptWalletProvider() {
     ) {
       const tx = args.params[0] as TransactionRequest;
       
-      console.log('[DOMAN] Intercepted transaction:', tx);
+      console.log('[SIFIX] Intercepted transaction:', tx);
 
       // Analyze transaction before signing
       const analysis = await analyzTransaction(tx);
@@ -45,7 +47,7 @@ function interceptWalletProvider() {
       const userDecision = await showRiskModal(tx, analysis);
 
       if (!userDecision) {
-        throw new Error('Transaction blocked by DOMAN Security Agent');
+        throw new Error('Transaction blocked by SIFIX Security Agent');
       }
     }
 
@@ -53,7 +55,7 @@ function interceptWalletProvider() {
     return originalRequest.apply(this, [args]);
   };
 
-  console.log('[DOMAN] Wallet provider intercepted');
+  console.log('[SIFIX] Wallet provider intercepted');
 }
 
 /**
@@ -75,7 +77,7 @@ async function analyzTransaction(tx: TransactionRequest): Promise<RiskAnalysis> 
 
     return result.data.analysis;
   } catch (error) {
-    console.error('[DOMAN] Analysis failed:', error);
+    console.error('[SIFIX] Analysis failed:', error);
     
     // Fail-safe: allow transaction if analysis fails
     return {
@@ -217,7 +219,7 @@ async function showRiskModal(
           font-size: 12px;
           color: #9ca3af;
         ">
-          Protected by DOMAN x 0G Security Agent
+          Protected by SIFIX x 0G Security Agent
         </p>
       </div>
     `;
@@ -244,4 +246,4 @@ if (document.readyState === 'loading') {
   interceptWalletProvider();
 }
 
-console.log('[DOMAN] Security Agent loaded');
+console.log('[SIFIX] Security Agent loaded');

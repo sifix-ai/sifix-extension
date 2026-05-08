@@ -4,7 +4,7 @@ interface ConnectScreenProps {
   onConnected: (walletAddress: string) => void
 }
 
-const DAPP_EXTENSION_URL = "http://localhost:3001/dashboard/extension"
+const DAPP_EXTENSION_URL = process.env.PLASMO_PUBLIC_DAPP_EXTENSION_URL || "http://localhost:3000/dashboard/extension"
 
 export function ConnectScreen({ onConnected }: ConnectScreenProps) {
   const [mode, setMode] = useState<"main" | "paste">("main")

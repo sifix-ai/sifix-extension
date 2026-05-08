@@ -3,7 +3,7 @@
  * All requests go through dApp API with Bearer token auth
  */
 
-const DAPP_API_BASE = "http://localhost:3001/api/v1"
+const DAPP_API_BASE = process.env.PLASMO_PUBLIC_DAPP_API_URL || "http://localhost:3000/api/v1"
 
 function getApiBase(): string {
   return DAPP_API_BASE

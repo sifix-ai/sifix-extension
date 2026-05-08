@@ -1,5 +1,7 @@
 // SIFIX Constants
 
+import process from "process"
+
 export const MSG = {
   // Wallet
   GET_WALLET_STATE: "SIFIX_GET_WALLET_STATE",
@@ -73,12 +75,10 @@ export const CHAIN_NAMES: Record<number, string> = {
   16601: "0G Newton Mainnet",
 }
 
-// Default dApp API URL
-export const DEFAULT_DAPP_API = "http://localhost:3001/api/v1"
 
 export const DEFAULT_SETTINGS = {
   protectionEnabled: true,
   autoBlockHighRisk: false,
   notifications: true,
-  dappApiUrl: "http://localhost:3001/api/v1",
+  dappApiUrl: process.env.PLASMO_PUBLIC_DAPP_API_URL || "http://localhost:3000/api/v1",
 }

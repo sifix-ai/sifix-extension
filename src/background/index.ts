@@ -16,6 +16,21 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log("[SIFIX] Extension installed")
 })
 
+// ─── Early TX Interceptor Injection ─────────────────
+// Inject our Proxy into pages BEFORE any other scripts run.
+// This ensures we hook window.ethereum before dApps capture a reference.
+chrome.webNavigation?.onCommitted?.addListener((details) => {
+  if (details.frameId !== 0) return // only main frame
+  if (!details.url.startsWith("http")) return // skip chrome:// etc
+
+  chrome.scripting.executeScript({
+    target: { tabId: details.tabId },
+    files: ["tx-interceptor.js"],
+    world: "MAIN" as any,
+    injectImmediately: true,
+  }).catch(() => {})
+})
+
 // Load persisted state
 chrome.storage.local.get(["walletState", "settings"], (result) => {
   if (result.walletState) walletState = result.walletState

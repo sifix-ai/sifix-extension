@@ -12,15 +12,44 @@
   "use strict"
 
   // Don't double-inject
-  if ((window as any).__SIFIX_INTERCEPTOR_ACTIVE) return
-  ;(window as any).__SIFIX_INTERCEPTOR_ACTIVE = true
+  if (window.__SIFIX_INTERCEPTOR_ACTIVE) return
+  window.__SIFIX_INTERCEPTOR_ACTIVE = true
 
   var TX_METHODS = ["eth_sendTransaction", "eth_signTransaction"]
-  var SIGN_METHODS = ["personal_sign", "eth_sign", "eth_signTypedData", "eth_signTypedData_v3", "eth_signTypedData_v4"]
+  var SIGN_METHODS = [
+    "personal_sign",
+    "eth_sign",
+    "eth_signTypedData",
+    "eth_signTypedData_v3",
+    "eth_signTypedData_v4",
+    "eth_getEncryptionPublicKey",
+    "eth_decrypt"
+  ]
+  var WALLET_METHODS = [
+    "eth_requestAccounts",
+    "wallet_requestPermissions",
+    "wallet_addEthereumChain",
+    "wallet_switchEthereumChain",
+    "wallet_watchAsset"
+  ]
+
+  var bridgeReady = false
+
+  window.addEventListener("message", function (event) {
+    if (event.source !== window) return
+    if (event.data && event.data.type === "SIFIX_BRIDGE_READY") {
+      bridgeReady = true
+    }
+  })
 
   // ─── API Bridge (MAIN → ISOLATED content script → dApp API) ────
   function analyzeTx(tx) {
     return new Promise(function (resolve) {
+      if (!bridgeReady) {
+        resolve({ success: false, riskLevel: "UNKNOWN", riskScore: 0, confidence: 0, recommendation: "PROCEED", explanation: "Bridge not ready. Reload the page and ensure the extension content script is active.", detectedThreats: [], error: "bridge_not_ready" })
+        return
+      }
+
       var id = "sifix_" + Date.now() + "_" + Math.random().toString(36).slice(2)
       var handler = function (e) {
         if (e.data && e.data.type === "SIFIX_ANALYSIS_RESULT" && e.data.requestId === id) {
@@ -47,41 +76,68 @@
       var isTx = TX_METHODS.indexOf(method) !== -1
       var valEth = tx.value ? (parseInt(tx.value, 16) / 1e18).toFixed(6) : null
 
+      var toRow = tx.to
+        ? '<div class="sifix-row"><span class="sifix-label">To</span><span class="sifix-mono">' + tx.to + '</span></div>'
+        : ""
+      var valueRow = valEth
+        ? '<div class="sifix-row"><span class="sifix-label">Value</span><span class="sifix-mono">' + valEth + ' ETH</span></div>'
+        : ""
+      var fromRow = tx.from
+        ? '<div class="sifix-row"><span class="sifix-label">From</span><span class="sifix-mono">' + tx.from + '</span></div>'
+        : ""
+
       var overlay = document.createElement("div")
       overlay.id = "sifix-popup"
-      overlay.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(5,8,12,0.84);backdrop-filter:blur(12px);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:'Sora','Space Grotesk','Inter',ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif"
       overlay.innerHTML =
-        '<div style="background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:28px;max-width:420px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,0.6)">' +
-          '<div style="text-align:center;margin-bottom:20px">' +
-            '<div style="width:56px;height:56px;margin:0 auto 12px;background:linear-gradient(135deg,#ff6b6b,#4ecdc4);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:24px">&#x1F6E1;</div>' +
-            '<h2 style="color:white;margin:0 0 4px;font-size:20px">SIFIX Security Check</h2>' +
-            '<p style="color:#94a3b8;margin:0;font-size:13px">' + (isTx ? "Transaction Detected" : "Signature Request") + '</p>' +
-          '</div>' +
+        '<style>' +
+        '.sifix-card{background:linear-gradient(180deg,#0b0f14 0%,#0f172a 100%);border:1px solid rgba(148,163,184,0.18);border-radius:18px;padding:22px;max-width:460px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,0.55);color:#e2e8f0}' +
+        '.sifix-brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}' +
+        '.sifix-logo{width:40px;height:40px;border-radius:12px;background:radial-gradient(circle at 30% 30%,#22d3ee,#1f2a44);display:flex;align-items:center;justify-content:center;color:#0b0f14;font-weight:700;font-size:16px}' +
+        '.sifix-title{font-size:18px;font-weight:650;color:#f8fafc}' +
+        '.sifix-sub{font-size:12px;color:#94a3b8;margin-top:2px}' +
+        '.sifix-chip{font-size:11px;padding:4px 8px;border-radius:999px;background:rgba(34,211,238,0.12);color:#22d3ee;border:1px solid rgba(34,211,238,0.35)}' +
+        '.sifix-panel{background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.12);border-radius:12px;padding:10px 12px;margin-top:12px}' +
+        '.sifix-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(148,163,184,0.12);font-size:12px}' +
+        '.sifix-row:last-child{border-bottom:none}' +
+        '.sifix-label{color:#94a3b8}' +
+        '.sifix-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;font-size:11px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e2e8f0}' +
+        '.sifix-alert{margin-top:14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.28);border-radius:12px;padding:12px;font-size:12px;color:#fecaca;line-height:1.5}' +
+        '.sifix-actions{display:flex;flex-direction:column;gap:10px;margin-top:16px}' +
+        '.sifix-btn{padding:12px 16px;border-radius:12px;border:1px solid transparent;font-weight:600;font-size:13px;cursor:pointer;width:100%}' +
+        '.sifix-btn-primary{background:linear-gradient(135deg,#22d3ee,#0ea5e9);color:#03121a}' +
+        '.sifix-btn-ghost{background:transparent;border-color:#1f2a44;color:#cbd5e1}' +
+        '.sifix-btn-text{background:transparent;border:none;color:#64748b;font-weight:500}' +
+        '.sifix-footer{margin-top:12px;font-size:10px;color:#64748b;text-align:center}' +
+        '</style>' +
+        '<div class="sifix-card">' +
+        '<div class="sifix-brand">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+        '<div class="sifix-logo">S</div>' +
+        '<div>' +
+        '<div class="sifix-title">SIFIX Security Check</div>' +
+        '<div class="sifix-sub">' + (isTx ? "Transaction detected" : "Signature request") + '</div>' +
+        '</div>' +
+        '</div>' +
+        '<div class="sifix-chip">Pre-flight</div>' +
+        '</div>' +
 
-          '<div style="background:rgba(255,255,255,0.03);border-radius:12px;padding:12px;margin-bottom:20px">' +
-            (tx.to ? '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px"><span style="color:#94a3b8">To</span><span style="color:#e2e8f0;font-family:monospace;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + tx.to + '</span></div>' : '') +
-            (valEth ? '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px"><span style="color:#94a3b8">Value</span><span style="color:#e2e8f0;font-family:monospace;font-size:13px">' + valEth + ' ETH</span></div>' : '') +
-            (tx.from ? '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px"><span style="color:#94a3b8">From</span><span style="color:#e2e8f0;font-family:monospace;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + tx.from + '</span></div>' : '') +
-            '<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px"><span style="color:#94a3b8">Method</span><span style="color:#e2e8f0;font-family:monospace;font-size:12px">' + method + '</span></div>' +
-          '</div>' +
+        '<div class="sifix-panel">' +
+        toRow +
+        valueRow +
+        fromRow +
+        '<div class="sifix-row"><span class="sifix-label">Method</span><span class="sifix-mono">' + method + '</span></div>' +
+        '</div>' +
 
-          '<div style="background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.15);border-radius:12px;padding:14px;margin-bottom:20px;font-size:13px;color:#fca5a5;line-height:1.5">' +
-            'This transaction has not been analyzed yet. Run AI simulation to check for risks before sending to your wallet.' +
-          '</div>' +
+        '<div class="sifix-alert">This request has not been analyzed. Run AI simulation to check risks before passing it to your wallet.</div>' +
 
-          '<div style="display:flex;flex-direction:column;gap:10px">' +
-            '<button id="sifix-analyze" style="padding:14px 20px;border-radius:12px;border:none;background:linear-gradient(135deg,#ff6b6b,#4ecdc4);color:white;font-weight:600;font-size:15px;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:8px">' +
-              '&#x1F9EA; Simulate &amp; Analyze' +
-            '</button>' +
-            '<button id="sifix-proceed" style="padding:12px 20px;border-radius:12px;border:1px solid #334155;background:transparent;color:#94a3b8;font-weight:500;font-size:14px;cursor:pointer;width:100%">' +
-              'Proceed to Wallet (Skip Analysis)' +
-            '</button>' +
-            '<button id="sifix-cancel" style="padding:10px 20px;border-radius:10px;border:none;background:transparent;color:#64748b;font-weight:500;font-size:13px;cursor:pointer;width:100%">' +
-              'Cancel Transaction' +
-            '</button>' +
-          '</div>' +
+        '<div class="sifix-actions">' +
+        '<button id="sifix-analyze" class="sifix-btn sifix-btn-primary">Simulate &amp; Analyze</button>' +
+        '<button id="sifix-proceed" class="sifix-btn sifix-btn-ghost">Proceed to Wallet (Skip Analysis)</button>' +
+        '<button id="sifix-cancel" class="sifix-btn sifix-btn-text">Cancel Request</button>' +
+        '</div>' +
 
-          '<div style="text-align:center;margin-top:14px;font-size:11px;color:#475569">Powered by 0G Compute + Storage</div>' +
+        '<div class="sifix-footer">Powered by 0G Compute + Storage</div>' +
         '</div>'
 
       document.documentElement.appendChild(overlay)
@@ -105,13 +161,21 @@
   function showLoading() {
     var el = document.createElement("div")
     el.id = "sifix-loading"
-    el.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"
+    el.style.cssText = "position:fixed;inset:0;background:rgba(5,8,12,0.82);backdrop-filter:blur(12px);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:'Sora','Space Grotesk','Inter',ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif"
     el.innerHTML =
-      '<div style="background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:20px;padding:32px;text-align:center">' +
-        '<div style="width:48px;height:48px;border:4px solid #334155;border-top-color:#4ecdc4;border-radius:50%;animation:sifixspin 0.8s linear infinite;margin:0 auto 16px"></div>' +
-        '<div style="color:white;font-size:16px;font-weight:600;margin-bottom:4px">Analyzing Transaction...</div>' +
-        '<div style="color:#64748b;font-size:13px">0G Security Agent is checking for risks</div>' +
-        '<style>@keyframes sifixspin{to{transform:rotate(360deg)}}</style>' +
+      '<style>' +
+      '.sifix-load-card{background:linear-gradient(180deg,#0b0f14,#0f172a);border:1px solid rgba(148,163,184,0.18);border-radius:18px;padding:26px 28px;min-width:280px;text-align:center;color:#e2e8f0;box-shadow:0 24px 80px rgba(0,0,0,0.55)}' +
+      '.sifix-spinner{width:42px;height:42px;border:3px solid rgba(148,163,184,0.25);border-top-color:#22d3ee;border-radius:50%;animation:sifixspin 0.8s linear infinite;margin:0 auto 12px}' +
+      '.sifix-progress{height:6px;background:rgba(148,163,184,0.16);border-radius:999px;overflow:hidden;margin-top:12px}' +
+      '.sifix-bar{height:100%;width:30%;background:linear-gradient(90deg,#22d3ee,#0ea5e9);animation:sifixbar 1.4s ease-in-out infinite}' +
+      '@keyframes sifixspin{to{transform:rotate(360deg)}}' +
+      '@keyframes sifixbar{0%{transform:translateX(-60%)}50%{transform:translateX(200%)}100%{transform:translateX(400%)}}' +
+      '</style>' +
+      '<div class="sifix-load-card">' +
+      '<div class="sifix-spinner"></div>' +
+      '<div style="font-size:15px;font-weight:600">Analyzing request...</div>' +
+      '<div style="font-size:12px;color:#94a3b8;margin-top:6px">0G Security Agent running simulation</div>' +
+      '<div class="sifix-progress"><div class="sifix-bar"></div></div>' +
       '</div>'
     document.documentElement.appendChild(el)
     return function () { el.remove() }
@@ -129,7 +193,7 @@
       var title = isDanger ? "High Risk Detected!" : isWarn ? "Caution Advised" : "Transaction Looks Safe"
       var providerTag = analysis.provider === "0g-compute" ? '<span style="background:rgba(78,205,196,0.15);color:#4ecdc4;padding:4px 8px;border-radius:12px;font-size:10px">0G Compute</span>' : ""
       var threatsHtml = analysis.detectedThreats && analysis.detectedThreats.length
-        ? '<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.06);padding-top:12px"><div style="color:#ef4444;font-size:12px;font-weight:600;margin-bottom:8px">Threats Detected:</div>' + analysis.detectedThreats.map(function(t){ return '<div style="color:#fca5a5;font-size:12px;margin:4px 0">&bull; ' + t + '</div>' }).join("") + '</div>'
+        ? '<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.06);padding-top:12px"><div style="color:#ef4444;font-size:12px;font-weight:600;margin-bottom:8px">Threats Detected:</div>' + analysis.detectedThreats.map(function (t) { return '<div style="color:#fca5a5;font-size:12px;margin:4px 0">&bull; ' + t + '</div>' }).join("") + '</div>'
         : ""
       var storageHtml = analysis.storageHash
         ? '<div style="background:rgba(78,205,196,0.08);border:1px solid rgba(78,205,196,0.2);border-radius:10px;padding:12px;margin-bottom:16px"><span style="color:#4ecdc4;font-weight:600;font-size:13px">&#x1F517; Evidence stored on 0G Storage</span><div style="color:#64748b;font-size:11px;margin-top:4px;font-family:monospace">' + analysis.storageHash.slice(0, 24) + '...</div></div>'
@@ -137,30 +201,43 @@
 
       var overlay = document.createElement("div")
       overlay.id = "sifix-popup"
-      overlay.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(5,8,12,0.86);backdrop-filter:blur(12px);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:'Sora','Space Grotesk','Inter',ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif"
       overlay.innerHTML =
-        '<div style="background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid ' + accent + '30;border-radius:20px;padding:28px;max-width:420px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,0.6)">' +
-          '<div style="text-align:center;margin-bottom:20px">' +
-            '<div style="font-size:44px;margin-bottom:8px">' + icon + '</div>' +
-            '<h2 style="color:white;margin:0 0 6px;font-size:20px">' + title + '</h2>' +
-            '<div style="display:inline-flex;align-items:center;gap:8px">' +
-              '<span style="background:' + accent + '20;color:' + accent + ';padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">' + analysis.riskLevel + ' · Score ' + analysis.riskScore + '/100</span>' +
-              providerTag +
-            '</div>' +
-          '</div>' +
+        '<style>' +
+        '.sifix-card{background:linear-gradient(180deg,#0b0f14 0%,#0f172a 100%);border:1px solid rgba(148,163,184,0.18);border-radius:18px;padding:22px;max-width:460px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,0.55);color:#e2e8f0}' +
+        '.sifix-title{font-size:18px;font-weight:650;color:#f8fafc;margin:0}' +
+        '.sifix-sub{font-size:12px;color:#94a3b8;margin-top:2px}' +
+        '.sifix-pill{font-size:11px;padding:4px 10px;border-radius:999px;background:' + accent + '1A;color:' + accent + ';border:1px solid ' + accent + '55}' +
+        '.sifix-panel{background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.12);border-radius:12px;padding:12px;margin-top:12px}' +
+        '.sifix-actions{display:flex;gap:10px;margin-top:14px}' +
+        '.sifix-btn{padding:12px 16px;border-radius:12px;border:1px solid #1f2a44;font-weight:600;font-size:13px;cursor:pointer;flex:1}' +
+        '.sifix-btn-primary{background:' + accent + ';border-color:' + accent + ';color:#0b0f14}' +
+        '.sifix-btn-ghost{background:transparent;color:#cbd5e1}' +
+        '.sifix-footer{margin-top:12px;font-size:10px;color:#64748b;text-align:center}' +
+        '</style>' +
+        '<div class="sifix-card">' +
+        '<div style="text-align:center;margin-bottom:10px">' +
+        '<div style="width:40px;height:40px;margin:0 auto 8px;border-radius:12px;background:rgba(148,163,184,0.14);display:flex;align-items:center;justify-content:center;color:' + accent + ';font-weight:700">' + icon + '</div>' +
+        '<div class="sifix-title">' + title + '</div>' +
+        '<div class="sifix-sub">Risk assessment complete</div>' +
+        '<div style="display:flex;justify-content:center;gap:8px;margin-top:8px">' +
+        '<span class="sifix-pill">' + analysis.riskLevel + ' · ' + analysis.riskScore + '/100</span>' +
+        providerTag +
+        '</div>' +
+        '</div>' +
 
-          '<div style="background:rgba(255,255,255,0.03);border-radius:12px;padding:14px;margin-bottom:16px">' +
-            '<div style="color:#cbd5e0;font-size:13px;line-height:1.6">' + (analysis.explanation || "Analysis complete.") + '</div>' +
-            threatsHtml +
-          '</div>' +
+        '<div class="sifix-panel">' +
+        '<div style="font-size:12px;line-height:1.6;color:#cbd5e1">' + (analysis.explanation || "Analysis complete.") + '</div>' +
+        threatsHtml +
+        '</div>' +
 
-          storageHtml +
+        storageHtml +
 
-          '<div style="display:flex;gap:10px">' +
-            '<button id="sifix-cancel2" style="padding:12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-weight:600;font-size:14px;cursor:pointer;flex:1">' + (isDanger ? 'Block' : 'Cancel') + '</button>' +
-            '<button id="sifix-proceed2" style="padding:12px;border-radius:10px;border:none;background:' + accent + ';color:white;font-weight:600;font-size:14px;cursor:pointer;flex:1">' + (isDanger ? 'Proceed Anyway' : 'Send to Wallet') + '</button>' +
-          '</div>' +
-          '<div style="text-align:center;margin-top:12px;font-size:11px;color:#475569">Protected by SIFIX x 0G Security Agent</div>' +
+        '<div class="sifix-actions">' +
+        '<button id="sifix-cancel2" class="sifix-btn sifix-btn-ghost">' + (isDanger ? 'Block' : 'Cancel') + '</button>' +
+        '<button id="sifix-proceed2" class="sifix-btn sifix-btn-primary">' + (isDanger ? 'Proceed Anyway' : 'Send to Wallet') + '</button>' +
+        '</div>' +
+        '<div class="sifix-footer">Protected by SIFIX x 0G Security Agent</div>' +
         '</div>'
 
       document.documentElement.appendChild(overlay)
@@ -181,8 +258,9 @@
               var params = args.params || []
               var isTx = TX_METHODS.indexOf(method) !== -1
               var isSign = SIGN_METHODS.indexOf(method) !== -1
+              var isWallet = WALLET_METHODS.indexOf(method) !== -1 || (method && method.indexOf("wallet_") === 0)
 
-              if (isTx || isSign) {
+              if (isTx || isSign || isWallet) {
                 console.log("[SIFIX] ⚡ Intercepted:", method, params)
 
                 var tx = isTx ? (params[0] || {}) : {}

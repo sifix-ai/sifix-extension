@@ -37,11 +37,49 @@ interface AnalysisResult {
 }
 
 const TX_METHODS = ["eth_sendTransaction", "eth_signTransaction"]
-const SIGN_METHODS = ["personal_sign", "eth_sign", "eth_signTypedData", "eth_signTypedData_v3", "eth_signTypedData_v4"]
+const SIGN_METHODS = [
+  "personal_sign",
+  "eth_sign",
+  "eth_signTypedData",
+  "eth_signTypedData_v3",
+  "eth_signTypedData_v4",
+  "eth_getEncryptionPublicKey",
+  "eth_decrypt",
+]
+const WALLET_METHODS = [
+  "eth_requestAccounts",
+  "wallet_requestPermissions",
+  "wallet_addEthereumChain",
+  "wallet_switchEthereumChain",
+  "wallet_watchAsset",
+]
+
+let bridgeReady = false
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window) return
+  if (event.data?.type === "SIFIX_BRIDGE_READY") {
+    bridgeReady = true
+  }
+})
 
 // ─── API Bridge (MAIN → ISOLATED → dApp) ────────────
 function analyzeViaBridge(tx: TxRequest): Promise<AnalysisResult> {
   return new Promise((resolve) => {
+    if (!bridgeReady) {
+      resolve({
+        success: false,
+        riskLevel: "UNKNOWN",
+        riskScore: 0,
+        confidence: 0,
+        recommendation: "PROCEED",
+        explanation: "Bridge not ready. Reload the page and ensure the extension content script is active.",
+        detectedThreats: [],
+        error: "bridge_not_ready",
+      })
+      return
+    }
+
     const requestId = "sifix_" + Date.now() + "_" + Math.random().toString(36).slice(2)
 
     const handler = (event: MessageEvent) => {
@@ -68,8 +106,22 @@ function analyzeViaBridge(tx: TxRequest): Promise<AnalysisResult> {
 function showLoading(): () => void {
   const el = document.createElement("div")
   el.id = "sifix-loading"
-  el.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);z-index:2147483646;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"
-  el.innerHTML = '<div style="background:#1a1a2e;border-radius:16px;padding:24px 32px;text-align:center"><div style="width:40px;height:40px;border:3px solid #334155;border-top-color:#4ecdc4;border-radius:50%;animation:sifixspin 0.8s linear infinite;margin:0 auto 12px"></div><div style="color:white;font-size:14px;font-weight:500">SIFIX analyzing...</div><div style="color:#64748b;font-size:12px;margin-top:4px">0G Security Agent</div></div><style>@keyframes sifixspin{to{transform:rotate(360deg)}}</style>'
+  el.style.cssText = "position:fixed;inset:0;background:rgba(5,8,12,0.82);backdrop-filter:blur(12px);z-index:2147483646;display:flex;align-items:center;justify-content:center;font-family:'Sora','Space Grotesk','Inter',ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif"
+  el.innerHTML =
+    '<style>' +
+    '.sifix-load-card{background:linear-gradient(180deg,#0b0f14,#0f172a);border:1px solid rgba(148,163,184,0.18);border-radius:18px;padding:26px 28px;min-width:280px;text-align:center;color:#e2e8f0;box-shadow:0 24px 80px rgba(0,0,0,0.55)}' +
+    '.sifix-spinner{width:42px;height:42px;border:3px solid rgba(148,163,184,0.25);border-top-color:#22d3ee;border-radius:50%;animation:sifixspin 0.8s linear infinite;margin:0 auto 12px}' +
+    '.sifix-progress{height:6px;background:rgba(148,163,184,0.16);border-radius:999px;overflow:hidden;margin-top:12px}' +
+    '.sifix-bar{height:100%;width:30%;background:linear-gradient(90deg,#22d3ee,#0ea5e9);animation:sifixbar 1.4s ease-in-out infinite}' +
+    '@keyframes sifixspin{to{transform:rotate(360deg)}}' +
+    '@keyframes sifixbar{0%{transform:translateX(-60%)}50%{transform:translateX(200%)}100%{transform:translateX(400%)}}' +
+    '</style>' +
+    '<div class="sifix-load-card">' +
+    '<div class="sifix-spinner"></div>' +
+    '<div style="font-size:15px;font-weight:600">Analyzing request...</div>' +
+    '<div style="font-size:12px;color:#94a3b8;margin-top:6px">0G Security Agent running simulation</div>' +
+    '<div class="sifix-progress"><div class="sifix-bar"></div></div>' +
+    '</div>'
   document.documentElement.appendChild(el)
   return () => el.remove()
 }
@@ -96,33 +148,50 @@ function showRiskModal(method: string, tx: TxRequest, analysis: AnalysisResult):
 
     const overlay = document.createElement("div")
     overlay.id = "sifix-modal"
-    overlay.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(5,8,12,0.86);backdrop-filter:blur(12px);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:'Sora','Space Grotesk','Inter',ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif"
     overlay.innerHTML = `
-      <div style="background:${bg};border:1px solid ${accent}40;border-radius:20px;padding:28px;max-width:440px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
-        <div style="text-align:center;margin-bottom:20px">
-          <div style="font-size:40px;margin-bottom:8px">${icon}</div>
-          <h2 style="color:white;margin:0 0 4px;font-size:20px">${title}</h2>
-          <div style="display:inline-flex;align-items:center;gap:8px;margin-top:8px">
-            <span style="background:${accent}20;color:${accent};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">${analysis.riskLevel} · Score ${analysis.riskScore}/100</span>
+      <style>
+        .sifix-card{background:linear-gradient(180deg,#0b0f14 0%,#0f172a 100%);border:1px solid rgba(148,163,184,0.18);border-radius:18px;padding:22px;max-width:460px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,0.55);color:#e2e8f0}
+        .sifix-title{font-size:18px;font-weight:650;color:#f8fafc;margin:0}
+        .sifix-sub{font-size:12px;color:#94a3b8;margin-top:2px}
+        .sifix-pill{font-size:11px;padding:4px 10px;border-radius:999px;background:${accent}1A;color:${accent};border:1px solid ${accent}55}
+        .sifix-panel{background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.12);border-radius:12px;padding:12px;margin-top:12px}
+        .sifix-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(148,163,184,0.12);font-size:12px}
+        .sifix-row:last-child{border-bottom:none}
+        .sifix-label{color:#94a3b8}
+        .sifix-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;font-size:11px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e2e8f0}
+        .sifix-actions{display:flex;gap:10px;margin-top:14px}
+        .sifix-btn{padding:12px 16px;border-radius:12px;border:1px solid #1f2a44;font-weight:600;font-size:13px;cursor:pointer;flex:1}
+        .sifix-btn-primary{background:${accent};border-color:${accent};color:#0b0f14}
+        .sifix-btn-ghost{background:transparent;color:#cbd5e1}
+        .sifix-footer{margin-top:12px;font-size:10px;color:#64748b;text-align:center}
+      </style>
+      <div class="sifix-card">
+        <div style="text-align:center;margin-bottom:10px">
+          <div style="width:40px;height:40px;margin:0 auto 8px;border-radius:12px;background:rgba(148,163,184,0.14);display:flex;align-items:center;justify-content:center;color:${accent};font-weight:700">${icon}</div>
+          <div class="sifix-title">${title}</div>
+          <div class="sifix-sub">Risk assessment complete</div>
+          <div style="display:flex;justify-content:center;gap:8px;margin-top:8px">
+            <span class="sifix-pill">${analysis.riskLevel} · ${analysis.riskScore}/100</span>
             ${providerTag}
           </div>
         </div>
-        <div style="background:rgba(255,255,255,0.03);border-radius:12px;padding:12px;margin-bottom:16px">
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px"><span style="color:#94a3b8">From</span><span style="color:#e2e8f0;font-family:monospace;font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tx.from || "-"}</span></div>
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px"><span style="color:#94a3b8">To</span><span style="color:#e2e8f0;font-family:monospace;font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tx.to || "-"}</span></div>
-          ${valEth ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px"><span style="color:#94a3b8">Value</span><span style="color:#e2e8f0;font-family:monospace;font-size:12px">${valEth} ETH</span></div>` : ""}
-          <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px"><span style="color:#94a3b8">Method</span><span style="color:#e2e8f0;font-family:monospace;font-size:12px">${method}</span></div>
+        <div class="sifix-panel">
+          <div class="sifix-row"><span class="sifix-label">From</span><span class="sifix-mono">${tx.from || "-"}</span></div>
+          <div class="sifix-row"><span class="sifix-label">To</span><span class="sifix-mono">${tx.to || "-"}</span></div>
+          ${valEth ? `<div class="sifix-row"><span class="sifix-label">Value</span><span class="sifix-mono">${valEth} ETH</span></div>` : ""}
+          <div class="sifix-row"><span class="sifix-label">Method</span><span class="sifix-mono">${method}</span></div>
         </div>
-        <div style="background:rgba(255,255,255,0.03);border-radius:12px;padding:14px;margin-bottom:16px">
-          <div style="color:#cbd5e0;font-size:13px;line-height:1.6">${analysis.explanation || "No analysis available."}</div>
+        <div class="sifix-panel">
+          <div style="font-size:12px;line-height:1.6;color:#cbd5e1">${analysis.explanation || "No analysis available."}</div>
           ${threatsHtml}
         </div>
         ${storageHtml}
-        <div style="display:flex;gap:10px">
-          <button id="sifix-cancel" style="padding:12px 20px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-weight:600;font-size:14px;cursor:pointer;flex:1">${isDanger ? "Block" : "Cancel"}</button>
-          <button id="sifix-proceed" style="padding:12px 20px;border-radius:10px;border:none;background:${accent};color:white;font-weight:600;font-size:14px;cursor:pointer;flex:1">${isDanger ? "Proceed Anyway (Risky)" : "Proceed"}</button>
+        <div class="sifix-actions">
+          <button id="sifix-cancel" class="sifix-btn sifix-btn-ghost">${isDanger ? "Block" : "Cancel"}</button>
+          <button id="sifix-proceed" class="sifix-btn sifix-btn-primary">${isDanger ? "Proceed Anyway" : "Proceed"}</button>
         </div>
-        <div style="text-align:center;margin-top:12px;font-size:11px;color:#475569">Protected by SIFIX x 0G Security Agent</div>
+        <div class="sifix-footer">Protected by SIFIX x 0G Security Agent</div>
       </div>`
     document.documentElement.appendChild(overlay)
 
@@ -141,8 +210,9 @@ function injectProxy(original: any): boolean {
             const { method, params = [] } = args
             const isTx = TX_METHODS.includes(method)
             const isSign = SIGN_METHODS.includes(method)
+            const isWallet = WALLET_METHODS.includes(method) || method.startsWith("wallet_")
 
-            if (isTx || isSign) {
+            if (isTx || isSign || isWallet) {
               console.log("[SIFIX] Intercepted:", method)
               const tx: TxRequest = isTx ? (params[0] || {}) : {}
               const hideLoading = showLoading()

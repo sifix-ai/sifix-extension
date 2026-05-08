@@ -91,3 +91,8 @@ window.addEventListener("message", async (event) => {
     }, "*")
   }
 })
+
+// Signal to MAIN world that the bridge is ready.
+try {
+  window.postMessage({ type: "SIFIX_BRIDGE_READY" }, "*")
+} catch {}

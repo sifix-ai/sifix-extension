@@ -1,99 +1,58 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 interface ConnectScreenProps {
   onConnected: (walletAddress: string) => void
 }
 
-// Send message to background script (which has access to active tab's window.ethereum)
-function sendToBackground(type: string, payload?: any): Promise<any> {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ type, ...payload }, (response) => {
-      if (response?.error) {
-        reject(new Error(response.error))
-      } else if (response?.data) {
-        resolve(response.data)
-      } else {
-        reject(new Error("No response from background"))
-      }
-    })
-  })
-}
+const DAPP_EXTENSION_URL = "http://localhost:3001/dashboard/extension"
 
 export function ConnectScreen({ onConnected }: ConnectScreenProps) {
-  const [status, setStatus] = useState<"idle" | "connecting" | "signing" | "verifying" | "error">("idle")
-  const [error, setError] = useState<string>("")
+  const [mode, setMode] = useState<"main" | "paste">("main")
+  const [tokenInput, setTokenInput] = useState("")
+  const [status, setStatus] = useState<"idle" | "validating" | "error">("idle")
+  const [error, setError] = useState("")
 
-  const handleConnect = async () => {
-    setStatus("connecting")
+  // Auto-capture token from URL params (if dApp redirected with ?token=xxx)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get("token")
+    if (token) {
+      handleTokenCapture(token)
+    }
+  }, [])
+
+  const handleOpenDapp = () => {
+    chrome.tabs.create({ url: DAPP_EXTENSION_URL })
+  }
+
+  const handleTokenCapture = async (token: string) => {
+    setStatus("validating")
     setError("")
 
     try {
-      // Step 1: Get accounts via background → active tab → window.ethereum
-      const { accounts } = await sendToBackground("SIFIX_AUTH_CONNECT")
+      const { setToken, checkAuth } = await import("../lib/api-client")
+      await setToken(token)
+      const result = await checkAuth()
 
-      if (!accounts || accounts.length === 0) {
-        throw new Error("No accounts found in wallet")
+      if (result.valid && result.walletAddress) {
+        chrome.storage.local.set({ sifix_wallet: result.walletAddress })
+        onConnected(result.walletAddress)
+      } else {
+        const { clearToken } = await import("../lib/api-client")
+        await clearToken()
+        setError("Token tidak valid atau sudah expired")
+        setStatus("error")
       }
-
-      const walletAddress = accounts[0]
-
-      // Step 2: Get nonce from dApp
-      const { getNonce, verifySignature, setToken } = await import("../lib/api-client")
-      const nonceResp = await getNonce(walletAddress)
-
-      if (!nonceResp.message) {
-        throw new Error("Failed to get auth nonce from dApp")
-      }
-
-      // Step 3: Sign message via background → active tab → window.ethereum
-      setStatus("signing")
-      const { signature } = await sendToBackground("SIFIX_AUTH_SIGN", {
-        walletAddress,
-        message: nonceResp.message,
-      })
-
-      if (!signature) {
-        throw new Error("Failed to sign message")
-      }
-
-      // Step 4: Verify signature with dApp API
-      setStatus("verifying")
-      const verifyResp = await verifySignature({
-        walletAddress,
-        signature,
-        message: nonceResp.message,
-      })
-
-      if (!verifyResp.success || !verifyResp.token) {
-        throw new Error("Signature verification failed")
-      }
-
-      // Step 5: Store token
-      await setToken(verifyResp.token)
-      chrome.storage.local.set({ sifix_wallet: verifyResp.walletAddress })
-
-      setStatus("idle")
-      onConnected(verifyResp.walletAddress)
     } catch (err: any) {
+      setError(err.message || "Gagal validasi token")
       setStatus("error")
-      setError(err.message || "Connection failed")
-
-      setTimeout(() => {
-        setStatus("idle")
-        setError("")
-      }, 5000)
     }
   }
 
-  const statusText: Record<string, string> = {
-    idle: "",
-    connecting: "Connecting wallet...",
-    signing: "Please sign the message in your wallet...",
-    verifying: "Verifying signature...",
-    error: "",
+  const handlePasteSubmit = async () => {
+    if (!tokenInput.trim()) return
+    await handleTokenCapture(tokenInput.trim())
   }
-
-  const isConnecting = status === "connecting" || status === "signing" || status === "verifying"
 
   return (
     <div style={{
@@ -101,13 +60,27 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      padding: "32px 16px",
-      minHeight: "320px",
+      padding: "32px 20px",
+      minHeight: "480px",
       gap: "16px",
     }}>
       {/* Logo */}
       <div style={{
-        fontSize: "32px",
+        width: "56px",
+        height: "56px",
+        borderRadius: "16px",
+        background: "linear-gradient(135deg, #ff6b6b, #4ecdc4)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "24px",
+        fontWeight: 700,
+        color: "#fff",
+      }}>
+        S
+      </div>
+      <div style={{
+        fontSize: "22px",
         fontWeight: 700,
         color: "#fff",
         letterSpacing: "-0.5px",
@@ -115,56 +88,131 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
         SIFIX
       </div>
       <div style={{
-        fontSize: "13px",
+        fontSize: "12px",
         color: "#94a3b8",
         textAlign: "center",
+        maxWidth: "240px",
       }}>
         AI-Powered Wallet Security
       </div>
 
-      {/* Connect Button */}
-      <button
-        onClick={handleConnect}
-        disabled={isConnecting}
-        style={{
-          marginTop: "16px",
-          padding: "12px 32px",
-          borderRadius: "12px",
-          border: "none",
-          background: isConnecting ? "#334155" : "#3b82f6",
-          color: isConnecting ? "#94a3b8" : "#fff",
-          fontSize: "15px",
-          fontWeight: 600,
-          cursor: isConnecting ? "not-allowed" : "pointer",
-          transition: "all 0.2s",
-          width: "100%",
-          maxWidth: "280px",
-        }}
-      >
-        {isConnecting ? statusText[status] : "Connect to SIFIX"}
-      </button>
+      {/* Main: Open dApp */}
+      {mode === "main" && (
+        <>
+          <button
+            onClick={handleOpenDapp}
+            style={{
+              marginTop: "20px",
+              padding: "14px 28px",
+              borderRadius: "12px",
+              border: "none",
+              background: "linear-gradient(135deg, #ff6b6b, #4ecdc4)",
+              color: "#fff",
+              fontSize: "15px",
+              fontWeight: 600,
+              cursor: "pointer",
+              width: "100%",
+              maxWidth: "280px",
+              transition: "opacity 0.2s",
+            }}
+          >
+            Connect via dApp
+          </button>
 
-      {/* Spinner */}
-      {isConnecting && (
-        <div style={{
-          fontSize: "12px",
-          color: "#64748b",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-        }}>
-          <span style={{
-            display: "inline-block",
-            width: "12px",
-            height: "12px",
-            border: "2px solid #3b82f6",
-            borderTopColor: "transparent",
-            borderRadius: "50%",
-            animation: "spin 1s linear infinite",
-          }} />
-          {statusText[status]}
-          <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-        </div>
+          <div style={{
+            fontSize: "11px",
+            color: "#64748b",
+            textAlign: "center",
+            maxWidth: "240px",
+            lineHeight: "1.5",
+          }}>
+            Buka halaman SIFIX dApp, connect wallet, lalu copy token ke extension ini.
+          </div>
+
+          <button
+            onClick={() => setMode("paste")}
+            style={{
+              marginTop: "8px",
+              padding: "8px 16px",
+              borderRadius: "8px",
+              border: "1px solid #334155",
+              background: "transparent",
+              color: "#94a3b8",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+          >
+            Sudah punya token? Paste di sini
+          </button>
+        </>
+      )}
+
+      {/* Paste Token Mode */}
+      {mode === "paste" && (
+        <>
+          <div style={{ width: "100%", maxWidth: "280px", marginTop: "16px" }}>
+            <label style={{
+              fontSize: "12px",
+              color: "#94a3b8",
+              display: "block",
+              marginBottom: "6px",
+            }}>
+              Paste API Token
+            </label>
+            <textarea
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="sfx_..."
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: "8px",
+                border: "1px solid #334155",
+                background: "#1e293b",
+                color: "#fff",
+                fontSize: "12px",
+                fontFamily: "monospace",
+                resize: "none",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          <button
+            onClick={handlePasteSubmit}
+            disabled={!tokenInput.trim() || status === "validating"}
+            style={{
+              padding: "12px 24px",
+              borderRadius: "10px",
+              border: "none",
+              background: !tokenInput.trim() ? "#334155" : "#3b82f6",
+              color: !tokenInput.trim() ? "#64748b" : "#fff",
+              fontSize: "14px",
+              fontWeight: 600,
+              cursor: !tokenInput.trim() ? "not-allowed" : "pointer",
+              width: "100%",
+              maxWidth: "280px",
+            }}
+          >
+            {status === "validating" ? "Validating..." : "Connect"}
+          </button>
+
+          <button
+            onClick={() => { setMode("main"); setError(""); setTokenInput("") }}
+            style={{
+              padding: "6px 12px",
+              border: "none",
+              background: "transparent",
+              color: "#64748b",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+          >
+            Kembali
+          </button>
+        </>
       )}
 
       {/* Error */}
@@ -182,15 +230,15 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
         </div>
       )}
 
-      {/* Info */}
+      {/* Footer */}
       <div style={{
-        fontSize: "11px",
+        fontSize: "10px",
         color: "#475569",
         textAlign: "center",
-        maxWidth: "240px",
-        marginTop: "8px",
+        marginTop: "auto",
+        paddingTop: "16px",
       }}>
-        Sign a message to verify your wallet. No gas fees required.
+        Powered by 0G Compute + Storage
       </div>
     </div>
   )

@@ -12,34 +12,49 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
   const [status, setStatus] = useState<"idle" | "validating" | "error">("idle")
   const [error, setError] = useState("")
 
-  // Auto-capture token from URL params (if dApp redirected with ?token=xxx)
+  // Listen for token from content script (auto-connect from dApp postMessage)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const token = params.get("token")
-    if (token) {
-      handleTokenCapture(token)
+    const handler = (message: any) => {
+      if (message.type === "SIFIX_TOKEN_RECEIVED" && message.token) {
+        // Token was saved by content script, just verify
+        validateAndConnect()
+      }
     }
+    chrome.runtime.onMessage.addListener(handler)
+    return () => chrome.runtime.onMessage.removeListener(handler)
   }, [])
 
-  const handleOpenDapp = () => {
-    chrome.tabs.create({ url: DAPP_EXTENSION_URL })
+  // Also check if token already stored (user might have connected while popup was closed)
+  useEffect(() => {
+    checkExistingToken()
+  }, [])
+
+  const checkExistingToken = async () => {
+    try {
+      const { getToken, checkAuth } = await import("../lib/api-client")
+      const token = await getToken()
+      if (token) {
+        const result = await checkAuth()
+        if (result.valid && result.walletAddress) {
+          chrome.storage.local.set({ sifix_wallet: result.walletAddress })
+          onConnected(result.walletAddress)
+        }
+      }
+    } catch {}
   }
 
-  const handleTokenCapture = async (token: string) => {
+  const validateAndConnect = async () => {
     setStatus("validating")
     setError("")
 
     try {
-      const { setToken, checkAuth } = await import("../lib/api-client")
-      await setToken(token)
+      const { checkAuth } = await import("../lib/api-client")
       const result = await checkAuth()
 
       if (result.valid && result.walletAddress) {
         chrome.storage.local.set({ sifix_wallet: result.walletAddress })
         onConnected(result.walletAddress)
       } else {
-        const { clearToken } = await import("../lib/api-client")
-        await clearToken()
         setError("Token tidak valid atau sudah expired")
         setStatus("error")
       }
@@ -49,9 +64,24 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
     }
   }
 
+  const handleOpenDapp = () => {
+    chrome.tabs.create({ url: DAPP_EXTENSION_URL })
+  }
+
   const handlePasteSubmit = async () => {
     if (!tokenInput.trim()) return
-    await handleTokenCapture(tokenInput.trim())
+
+    setStatus("validating")
+    setError("")
+
+    try {
+      const { setToken } = await import("../lib/api-client")
+      await setToken(tokenInput.trim())
+      await validateAndConnect()
+    } catch (err: any) {
+      setError(err.message || "Gagal validasi token")
+      setStatus("error")
+    }
   }
 
   return (
@@ -123,10 +153,10 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
             fontSize: "11px",
             color: "#64748b",
             textAlign: "center",
-            maxWidth: "240px",
+            maxWidth: "260px",
             lineHeight: "1.5",
           }}>
-            Buka halaman SIFIX dApp, connect wallet, lalu copy token ke extension ini.
+            Token otomatis dikirim ke extension setelah connect wallet di dApp.
           </div>
 
           <button

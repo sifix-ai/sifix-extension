@@ -3,10 +3,27 @@
  * All requests go through dApp API with Bearer token auth
  */
 
-const DAPP_API_BASE = process.env.PLASMO_PUBLIC_DAPP_API_URL || "http://localhost:3000/api/v1"
+// Default — overridden by settings from chrome.storage
+let API_BASE = "http://localhost:3001/api/v1"
 
-function getApiBase(): string {
-  return DAPP_API_BASE
+// Load saved API base on init
+;(async () => {
+  try {
+    const result = await chrome.storage.local.get(["settings"])
+    if (result.settings?.dappApiUrl) {
+      API_BASE = result.settings.dappApiUrl
+    }
+  } catch {}
+})()
+
+async function getApiBase(): Promise<string> {
+  try {
+    const result = await chrome.storage.local.get(["settings"])
+    if (result.settings?.dappApiUrl) {
+      API_BASE = result.settings.dappApiUrl
+    }
+  } catch {}
+  return API_BASE
 }
 
 // Token storage helpers
@@ -58,7 +75,8 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
 // ============================================
 
 export async function getNonce(walletAddress: string): Promise<{ nonce: string; message: string; timestamp: number }> {
-  const resp = await fetch(`${getApiBase()}/auth/nonce?walletAddress=${walletAddress}`)
+  const base = await getApiBase()
+  const resp = await fetch(`${base}/auth/nonce?walletAddress=${walletAddress}`)
   return resp.json()
 }
 
@@ -67,7 +85,8 @@ export async function verifySignature(payload: {
   signature: string
   message: string
 }): Promise<{ success: boolean; token: string; walletAddress: string; expiresAt: string }> {
-  const resp = await fetch(`${getApiBase()}/auth/verify`, {
+  const base = await getApiBase()
+  const resp = await fetch(`${base}/auth/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -76,7 +95,8 @@ export async function verifySignature(payload: {
 }
 
 export async function checkAuth(): Promise<{ valid: boolean; walletAddress?: string }> {
-  const resp = await authFetch(`${getApiBase()}/auth/verify-token`)
+  const base = await getApiBase()
+  const resp = await authFetch(`${base}/auth/verify-token`)
   return resp.json()
 }
 
@@ -85,7 +105,8 @@ export async function checkAuth(): Promise<{ valid: boolean; walletAddress?: str
 // ============================================
 
 export async function extensionScan(address: string) {
-  const resp = await authFetch(`${getApiBase()}/extension/scan`, {
+  const base = await getApiBase()
+  const resp = await authFetch(`${base}/extension/scan`, {
     method: "POST",
     body: JSON.stringify({ address }),
   })
@@ -98,7 +119,8 @@ export async function extensionAnalyze(payload: {
   data?: string
   value?: string
 }) {
-  const resp = await authFetch(`${getApiBase()}/extension/analyze`, {
+  const base = await getApiBase()
+  const resp = await authFetch(`${base}/extension/analyze`, {
     method: "POST",
     body: JSON.stringify(payload),
   })
@@ -106,7 +128,8 @@ export async function extensionAnalyze(payload: {
 }
 
 export async function extensionGetSettings() {
-  const resp = await authFetch(`${getApiBase()}/extension/settings`)
+  const base = await getApiBase()
+  const resp = await authFetch(`${base}/extension/settings`)
   return resp.json()
 }
 
@@ -117,7 +140,8 @@ export async function extensionSubmitTag(payload: {
   evidence: string
   submittedBy: string
 }) {
-  const resp = await authFetch(`${getApiBase()}/threats/report`, {
+  const base = await getApiBase()
+  const resp = await authFetch(`${base}/threats/report`, {
     method: "POST",
     body: JSON.stringify(payload),
   })
@@ -125,6 +149,7 @@ export async function extensionSubmitTag(payload: {
 }
 
 export async function extensionGetStats() {
-  const resp = await authFetch(`${getApiBase()}/stats`)
+  const base = await getApiBase()
+  const resp = await authFetch(`${base}/stats`)
   return resp.json()
 }

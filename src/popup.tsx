@@ -26,24 +26,36 @@ function Popup() {
   const { transactions, stats, loading: txLoading } = useTransactions(10)
   const pageStatus = usePageStatus()
 
+  const checkAuthState = async () => {
+    const token = await getToken()
+    if (!token) {
+      setAuthState("disconnected")
+      return
+    }
+    const result = await checkAuth()
+    if (result.valid && result.walletAddress) {
+      setConnectedWallet(result.walletAddress)
+      setAuthState("connected")
+    } else {
+      await clearToken()
+      setAuthState("disconnected")
+    }
+  }
+
   // Check auth state on mount
   useEffect(() => {
-    async function check() {
-      const token = await getToken()
-      if (!token) {
-        setAuthState("disconnected")
-        return
-      }
-      const result = await checkAuth()
-      if (result.valid && result.walletAddress) {
-        setConnectedWallet(result.walletAddress)
-        setAuthState("connected")
-      } else {
-        await clearToken()
-        setAuthState("disconnected")
+    checkAuthState()
+  }, [])
+
+  // Listen for token from content script (auto-connect)
+  useEffect(() => {
+    const handler = (message: any) => {
+      if (message.type === "SIFIX_TOKEN_RECEIVED" && message.token) {
+        checkAuthState()
       }
     }
-    check()
+    chrome.runtime.onMessage.addListener(handler)
+    return () => chrome.runtime.onMessage.removeListener(handler)
   }, [])
 
   const handleConnected = (walletAddress: string) => {

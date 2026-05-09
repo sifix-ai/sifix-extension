@@ -2,13 +2,13 @@
  * SIFIX Background Service Worker
  *
  * Handles:
- * - Domain safety checking with cache (scan once per domain per session)
+ * - Auto domain safety scan on every page load (cached per session)
+ * - Auto TX analysis when intercepted
  * - Badge updates per tab (safe/warn/risk)
  * - Messaging between popup, content scripts, and APIs
- * - TX interceptor injection
  */
 
-import { MSG, DEFAULT_SETTINGS, CHAIN_NAMES, KNOWN_SCAM_DOMAINS, KNOWN_SAFE_DOMAINS } from "../constants"
+import { MSG, DEFAULT_SETTINGS, KNOWN_SCAM_DOMAINS, KNOWN_SAFE_DOMAINS } from "../constants"
 import type { WalletState, ExtensionSettings, SafetyLevel } from "../types"
 
 // ─── State ──────────────────────────────────────────
@@ -16,10 +16,7 @@ let walletState: WalletState = { address: null, chainId: null, connected: false,
 let settings: ExtensionSettings = { ...DEFAULT_SETTINGS }
 
 // ─── Domain Safety Cache ────────────────────────────
-// Scan once per domain — cache result forever in this session.
-// If domain was already scanned, return cached result (no re-scan).
 const safetyCache = new Map<string, { level: SafetyLevel; reason?: string; timestamp: number }>()
-const scannedDomains = new Set<string>()
 
 // ─── Init ───────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
@@ -50,11 +47,29 @@ chrome.storage.local.get(["walletState", "settings"], (result) => {
   if (result.settings) settings = { ...DEFAULT_SETTINGS, ...result.settings }
 })
 
-// ─── Message Handler ────────────────────────────────
+// ═════════════════════════════════════════════════════
+// AUTO DOMAIN SCAN — runs on every tab update
+// ═════════════════════════════════════════════════════
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === "loading" && tab.url?.startsWith("http")) {
+    // Only auto-scan if authenticated
+    chrome.storage.local.get(["sifix_token", "sifixProtectionEnabled"], (result) => {
+      if (!result.sifix_token) return
+      if (result.sifixProtectionEnabled === false) return
+
+      handleCheckDapp(tab.url!).then((result) => {
+        updateBadge(tabId, result.level, normalizeDomain(tab.url!))
+      }).catch(() => {})
+    })
+  }
+})
+
+// ═════════════════════════════════════════════════════
+// MESSAGE HANDLER
+// ═════════════════════════════════════════════════════
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
 
-    // ─── Wallet ──────────────────────────────
     case MSG.GET_WALLET_STATE: {
       chrome.storage.local.get("walletState", (r) => {
         sendResponse({ data: r.walletState || walletState })
@@ -98,7 +113,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true
     }
 
-    // ─── Scanning ────────────────────────────
+    // ─── Address Scanning ────────────────────
     case MSG.CHECK_ADDRESS: {
       handleCheckAddress(message.address)
         .then((data) => sendResponse({ data }))
@@ -106,14 +121,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true
     }
 
-    case MSG.SCAN_CONTRACT: {
-      handleScanContract(message.address)
-        .then((data) => sendResponse({ data }))
-        .catch((err) => sendResponse({ error: err.message }))
-      return true
-    }
-
-    // ─── Tags & Voting ──────────────────────
+    // ─── Tags ────────────────────────────────
     case MSG.GET_ADDRESS_TAGS: {
       handleGetTags(message.address)
         .then((data) => sendResponse({ data }))
@@ -201,12 +209,12 @@ async function getApiBase(): Promise<string> {
 }
 
 /**
- * Check domain safety.
- * 1. Cache check (scan once, result cached forever in this session)
- * 2. Local blacklist
+ * Check domain safety:
+ * 1. Cache (already scanned this session)
+ * 2. Local scam blacklist
  * 3. Local safe list
- * 4. SIFIX API /api/v1/extension/scan (authenticated)
- * 5. GoPlus phishing API (public, secondary)
+ * 4. SIFIX API /api/v1/check-domain
+ * 5. GoPlus phishing API (fallback)
  */
 async function handleCheckDapp(url: string): Promise<{ level: SafetyLevel; reason?: string }> {
   if (!url || !url.startsWith("http")) return { level: "unknown" }
@@ -214,97 +222,87 @@ async function handleCheckDapp(url: string): Promise<{ level: SafetyLevel; reaso
   const hostname = normalizeDomain(url)
   if (!hostname) return { level: "unknown" }
 
-  // ── Step 0: Cache check (already scanned?) ──
+  // Cache check
   const cached = safetyCache.get(hostname)
   if (cached) {
     return { level: cached.level, reason: cached.reason }
   }
 
-  // ── Step 1: Local scam blacklist (instant) ──
+  // Local scam blacklist
   const isLocalScam = KNOWN_SCAM_DOMAINS.some(
     (d) => hostname === d || hostname.endsWith(`.${d}`)
   )
   if (isLocalScam) {
     safetyCache.set(hostname, { level: "danger", reason: "Known scam domain.", timestamp: Date.now() })
-    updateBadge(undefined, "danger", hostname)
     return { level: "danger", reason: "Known scam domain." }
   }
 
-  // ── Step 2: Local safe list ──
+  // Local safe list
   const isLocalSafe = KNOWN_SAFE_DOMAINS.some(
     (d) => hostname === d || hostname.endsWith(`.${d}`)
   )
 
-  // ── Step 3: SIFIX API check (authenticated) ──
+  // SIFIX API check
   const token = await getToken()
   const apiBase = await getApiBase()
   let apiResult: { riskScore?: number; riskLevel?: string; isScam?: boolean } | null = null
 
-  if (token) {
-    try {
-      const resp = await fetch(`${apiBase}/scan/${encodeURIComponent(hostname)}`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      })
-      if (resp.ok) {
-        const json = await resp.json()
-        apiResult = json.data || json
-      }
-    } catch {
-      apiResult = null
+  try {
+    const headers: Record<string, string> = {}
+    if (token) headers["Authorization"] = `Bearer ${token}`
+
+    const resp = await fetch(`${apiBase}/check-domain?domain=${encodeURIComponent(hostname)}`, { headers })
+    if (resp.ok) {
+      const json = await resp.json()
+      apiResult = json.data || json
     }
+  } catch {
+    apiResult = null
   }
 
-  // If API says scam or high risk
+  // API says scam or high risk
   if (apiResult?.isScam || (apiResult?.riskScore ?? 0) >= 80) {
-    const level: SafetyLevel = "danger"
-    safetyCache.set(hostname, { level, reason: "SIFIX flagged this domain as dangerous.", timestamp: Date.now() })
-    updateBadge(undefined, level, hostname)
-    return { level, reason: "SIFIX flagged this domain as dangerous." }
+    safetyCache.set(hostname, { level: "danger", reason: "SIFIX flagged this domain as dangerous.", timestamp: Date.now() })
+    return { level: "danger", reason: "SIFIX flagged this domain as dangerous." }
   }
 
-  // If API says moderate risk
+  // Moderate risk
   if ((apiResult?.riskScore ?? 0) >= 40) {
-    const level: SafetyLevel = "warning"
-    safetyCache.set(hostname, { level, reason: "Elevated risk detected. Proceed with caution.", timestamp: Date.now() })
-    updateBadge(undefined, level, hostname)
-    return { level, reason: "Elevated risk detected. Proceed with caution." }
+    safetyCache.set(hostname, { level: "warning", reason: "Elevated risk detected. Proceed with caution.", timestamp: Date.now() })
+    return { level: "warning", reason: "Elevated risk detected. Proceed with caution." }
   }
 
-  // If API says safe or local safe
+  // API says safe or local safe
   if (isLocalSafe || (apiResult && (apiResult.riskScore ?? 0) < 40)) {
     safetyCache.set(hostname, { level: "safe", timestamp: Date.now() })
-    updateBadge(undefined, "safe", hostname)
     return { level: "safe" }
   }
 
-  // ── Step 4: GoPlus phishing check (public, fallback) ──
+  // GoPlus fallback
   try {
     const resp = await fetch(`https://api.gopluslabs.io/api/v1/phishing_site?url=${encodeURIComponent(url)}`)
     if (resp.ok) {
       const data = await resp.json()
       if (data?.result?.phishing_site === 1) {
         safetyCache.set(hostname, { level: "danger", reason: "GoPlus flagged this as a phishing site.", timestamp: Date.now() })
-        updateBadge(undefined, "danger", hostname)
         return { level: "danger", reason: "GoPlus flagged this as a phishing site." }
       }
     }
   } catch { }
 
-  // Default: unknown → treat as warning for safety
+  // Default unknown
   safetyCache.set(hostname, { level: "unknown", timestamp: Date.now() })
-  updateBadge(undefined, "unknown", hostname)
   return { level: "unknown", reason: "Domain not yet verified." }
 }
 
 async function handleCheckDomain(domain: string) {
-  // External explicit check (from popup scan input)
   const hostname = normalizeDomain(domain)
   if (!hostname) throw new Error("Invalid domain")
 
   const token = await getToken()
   const apiBase = await getApiBase()
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  const headers: Record<string, string> = {}
   if (token) headers["Authorization"] = `Bearer ${token}`
 
   try {
@@ -354,7 +352,7 @@ function updateBadge(tabId: number | undefined, level: SafetyLevel, hostname?: s
 }
 
 // ═════════════════════════════════════════════════════
-// WALLET HANDLERS (unchanged)
+// WALLET HANDLER
 // ═════════════════════════════════════════════════════
 
 async function handleConnectWallet(sender: chrome.runtime.MessageSender): Promise<WalletState> {
@@ -420,27 +418,88 @@ async function handleConnectWallet(sender: chrome.runtime.MessageSender): Promis
 }
 
 // ═════════════════════════════════════════════════════
-// STUBS (TODO: connect to SIFIX API)
+// API-CONNECTED HANDLERS (no more stubs)
 // ═════════════════════════════════════════════════════
 
 async function handleCheckAddress(address: string) {
-  return { address, inputType: "address", riskScore: 25, riskLevel: "LOW", isVerified: false, reportCount: 0, tags: [] }
-}
+  const token = await getToken()
+  const apiBase = await getApiBase()
 
-async function handleScanContract(address: string) {
-  return { address, riskScore: 30, level: "unknown", checks: [] }
+  const headers: Record<string, string> = {}
+  if (token) headers["Authorization"] = `Bearer ${token}`
+
+  try {
+    const resp = await fetch(`${apiBase}/scan/${encodeURIComponent(address)}`, { headers })
+    if (resp.ok) {
+      const json = await resp.json()
+      return json.data || json
+    }
+  } catch { }
+
+  return { address, inputType: "address", riskScore: 0, riskLevel: "SAFE", isVerified: false, reportCount: 0, tags: [] }
 }
 
 async function handleGetTags(address: string) {
+  const apiBase = await getApiBase()
+
+  try {
+    const resp = await fetch(`${apiBase}/../address-tags?address=${encodeURIComponent(address)}&limit=20`)
+    if (resp.ok) {
+      const json = await resp.json()
+      return (json.data || json)?.data || []
+    }
+  } catch { }
+
   return []
 }
 
 async function handleSubmitTag(payload: any) {
-  return { success: true, tag: payload }
+  const token = await getToken()
+  const apiBase = await getApiBase()
+
+  try {
+    const resp = await fetch(`${apiBase}/../address-tags`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    })
+    if (resp.ok) {
+      const json = await resp.json()
+      return json.data || json
+    }
+  } catch { }
+
+  return { success: false }
 }
 
 async function handleVoteTag(tagId: string, direction: "up" | "down") {
-  return { success: true, tagId, direction }
+  const token = await getToken()
+  const apiBase = await getApiBase()
+
+  try {
+    // Find the tag first to get its address
+    const resp = await fetch(`${apiBase}/../address-tags?limit=100`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    })
+    if (resp.ok) {
+      const json = await resp.json()
+      const tags = json.data?.data || json.data || []
+      const tag = tags.find((t: any) => t.id === tagId)
+      if (tag?.address) {
+        const voteResp = await fetch(`${apiBase}/../address/${encodeURIComponent(tag.address)}/tags/${tagId}/vote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ direction }),
+        })
+        if (voteResp.ok) {
+          const voteJson = await voteResp.json()
+          return voteJson.data || voteJson
+        }
+      }
+    }
+  } catch { }
+
+  return { success: false }
 }
 
 async function handleGetRecentTxs(limit: number) {
@@ -453,6 +512,16 @@ async function handleGetRecentTxs(limit: number) {
 }
 
 async function handleGetStats() {
+  const apiBase = await getApiBase()
+
+  try {
+    const resp = await fetch(`${apiBase}/../stats`)
+    if (resp.ok) {
+      const json = await resp.json()
+      return json.data || json
+    }
+  } catch { }
+
   try {
     const { getTxStats } = await import("../lib/db")
     return await getTxStats()

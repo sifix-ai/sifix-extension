@@ -24,7 +24,7 @@ export const MSG = {
   TX_VERDICT: "SIFIX_TX_VERDICT",
   GET_RECENT_TXS: "SIFIX_GET_RECENT_TXS",
 
-  // Page Safety
+  // Domain Safety
   CHECK_DAPP: "SIFIX_CHECK_DAPP",
   GET_PAGE_STATUS: "SIFIX_GET_PAGE_STATUS",
 
@@ -75,10 +75,49 @@ export const CHAIN_NAMES: Record<number, string> = {
   16601: "0G Newton Mainnet",
 }
 
-
 export const DEFAULT_SETTINGS = {
   protectionEnabled: true,
   autoBlockHighRisk: false,
   notifications: true,
   dappApiUrl: process.env.PLASMO_PUBLIC_DAPP_API_URL || "http://localhost:3000/api/v1",
 }
+
+// ── Known Scam Domains (Local Blacklist) ─────────────
+export const KNOWN_SCAM_DOMAINS: string[] = [
+  // Fake Uniswap
+  "uiniswap.com", "uniswap-claiming.com", "uniswaps.org", "uniswap-airdrop.com", "app-uniswap.org",
+  // Fake MetaMask
+  "metamask-io.com", "metamask-wallet.net", "metamaski.io", "connect-metamask.com",
+  // Fake Coinbase
+  "coinbase-wallet.net", "coinbaase.com", "coinbase-verify.com",
+  // Fake Base
+  "base-airdrop.com", "base-chain.net", "basescan-verify.com", "base-claim.xyz",
+  // Fake OpenSea
+  "openseea.io", "opensea-verify.com",
+  // Fake Aave
+  "aave-app.com", "aave-protocol.net",
+  // General crypto phishing
+  "eth-reward.com", "free-eth-airdrop.com", "wallet-connect.net",
+  "walletconnect-bridge.com", "dapp-approve.com", "token-approve.com",
+  "nft-mint-free.com", "claimairdrop.xyz", "claim-rewards.xyz",
+  "defi-staking.net", "pancakeswap-v3.com", "sushiswap-app.com",
+]
+
+// ── Known Safe Domains ───────────────────────────────
+export const KNOWN_SAFE_DOMAINS: string[] = [
+  // Block explorers
+  "etherscan.io", "basescan.org", "polygonscan.com", "arbiscan.io", "optimistic.etherscan.io",
+  // DEXs
+  "app.uniswap.org", "uniswap.org", "app.sushi.com", "pancakeswap.finance", "aerodrome.finance",
+  "curve.fi", "balancer.fi", "1inch.io",
+  // Lending
+  "app.aave.com", "aave.com", "compound.finance",
+  // Base ecosystem
+  "base.org", "bridge.base.org",
+  // NFT
+  "opensea.io", "zora.co", "blur.io",
+  // Wallets & infra
+  "metamask.io", "coinbase.com", "walletconnect.com", "safe.global",
+  // General
+  "github.com", "google.com", "x.com", "twitter.com", "discord.com",
+]

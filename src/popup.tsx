@@ -2,6 +2,8 @@ import { useState, useEffect } from "react"
 import { ConnectScreen } from "./components/ConnectScreen"
 import { getToken, checkAuth, clearToken } from "./lib/api-client"
 import { isDappUrl, isInternalPage } from "./utils/detect-dapp"
+import { MSG } from "./constants"
+import type { SafetyLevel } from "./types"
 import "./style.css"
 
 type AuthState = "loading" | "connected" | "disconnected"
@@ -13,6 +15,12 @@ interface TabInfo {
   isInternal: boolean
 }
 
+interface DomainSafety {
+  safety: SafetyLevel
+  reason: string
+  domain: string
+}
+
 const DAPP_DASHBOARD = process.env.PLASMO_PUBLIC_DAPP_EXTENSION_URL || "http://localhost:3000/dashboard/extension"
 
 function Popup() {
@@ -20,6 +28,7 @@ function Popup() {
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null)
   const [protecting, setProtecting] = useState(true)
   const [tabInfo, setTabInfo] = useState<TabInfo>({ url: "", domain: "", isDapp: false, isInternal: true })
+  const [domainSafety, setDomainSafety] = useState<DomainSafety>({ safety: "unknown", reason: "", domain: "" })
 
   // --- Auth check ---
   const checkAuthState = async () => {
@@ -41,20 +50,41 @@ function Popup() {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
       const url = tab?.url || ""
       const domain = url ? new URL(url).hostname : ""
-      setTabInfo({
-        url,
-        domain,
-        isDapp: isDappUrl(url),
-        isInternal: isInternalPage(url),
-      })
+      const isDapp = isDappUrl(url)
+      const isInternal = isInternalPage(url)
+      setTabInfo({ url, domain, isDapp, isInternal })
+      return { url, domain, isDapp, isInternal }
     } catch {
       setTabInfo({ url: "", domain: "", isDapp: false, isInternal: true })
+      return null
+    }
+  }
+
+  // --- Domain safety check via background ---
+  const checkDomainSafety = async (url: string) => {
+    try {
+      const resp = await chrome.runtime.sendMessage({ type: MSG.GET_PAGE_STATUS, url })
+      if (resp?.data) {
+        setDomainSafety(resp.data)
+      }
+    } catch (e) {
+      console.error("Failed to get page status:", e)
     }
   }
 
   useEffect(() => {
-    checkAuthState()
-    detectTab()
+    const init = async () => {
+      await checkAuthState()
+      const tab = await detectTab()
+      // If on a dApp page + authenticated, check domain safety
+      if (tab?.isDapp && tab?.url) {
+        const token = await getToken()
+        if (token) {
+          await checkDomainSafety(tab.url)
+        }
+      }
+    }
+    init()
   }, [])
 
   // Listen for token from dapp
@@ -95,7 +125,7 @@ function Popup() {
   }
 
   // ══════════════════════════════════════════
-  // STATE: Disconnected (needs to activate via dApp)
+  // STATE: Disconnected
   // ══════════════════════════════════════════
   if (authState === "disconnected") {
     return (
@@ -110,72 +140,22 @@ function Popup() {
   }
 
   // ══════════════════════════════════════════
-  // STATE: Connected — Inactive (internal page / web2)
+  // STATE: Connected — Inactive (internal / web2)
   // ══════════════════════════════════════════
   if (!tabInfo.isDapp || tabInfo.isInternal) {
     return (
       <div className="popup-container">
         <div className="absolute inset-x-0 top-0 h-48 glow-blue pointer-events-none" style={{ opacity: 0.08 }} />
-
         <div className="relative z-10 flex flex-col items-center flex-1 px-6 pt-8 pb-4">
-          {/* Brand header */}
           <BrandHeader />
-
-          {/* Inactive shield */}
-          <div className="relative mb-4 mt-2">
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center"
-              style={{
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.08)"
-              }}
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(252,253,255,0.25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              </svg>
-            </div>
-          </div>
-
-          <h2 className="text-sm font-semibold text-sifix-text-60 tracking-tight">
-            {tabInfo.isInternal ? "No Active Page" : "Inactive"}
-          </h2>
-          <p className="text-[10px] text-sifix-text-40 mt-1 text-center max-w-[200px] leading-relaxed">
-            {tabInfo.isInternal
-              ? "Navigate to a dApp to activate transaction protection."
-              : "This is not a dApp. SIFIX activates automatically on Web3 applications."}
-          </p>
-
-          {tabInfo.domain && !tabInfo.isInternal && (
-            <div className="mt-3 px-3 py-1.5 rounded-full flex items-center gap-1.5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sifix-text-30">
-                <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-              </svg>
-              <span className="text-[10px] text-sifix-text-40 font-mono">{tabInfo.domain}</span>
-            </div>
-          )}
-
-          {/* Wallet info */}
-          <div className="mt-auto flex flex-col items-center gap-2 pb-1">
-            <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#3b9eff" }} />
-              <span className="text-[10px] text-sifix-text-40 font-mono">
-                {connectedWallet ? connectedWallet.slice(0, 6) + "..." + connectedWallet.slice(-4) : ""}
-              </span>
-            </div>
-            <button
-              onClick={async () => {
-                await clearToken()
-                chrome.storage.local.remove("sifix_wallet")
-                setConnectedWallet(null)
-                setAuthState("disconnected")
-              }}
-              className="text-[9px] text-sifix-text-30 hover:text-accent-red transition-colors cursor-pointer"
-            >
-              Disconnect
-            </button>
-          </div>
+          <InactiveShield isInternal={tabInfo.isInternal} domain={tabInfo.domain} />
+          <WalletFooter wallet={connectedWallet} onDisconnect={async () => {
+            await clearToken()
+            chrome.storage.local.remove("sifix_wallet")
+            setConnectedWallet(null)
+            setAuthState("disconnected")
+          }} />
         </div>
-
         <Footer />
       </div>
     )
@@ -184,21 +164,22 @@ function Popup() {
   // ══════════════════════════════════════════
   // STATE: Connected — Active on dApp
   // ══════════════════════════════════════════
-  const isSafe = protecting
-  const accentColor = protecting ? "#11ff99" : "rgba(252,253,255,0.25)"
-  const statusLabel = protecting ? "Active" : "Paused"
-  const glowClass = protecting ? "glow-green" : "glow-blue"
+  const safety = domainSafety.safety
+  const isSafe = safety === "safe"
+  const isWarning = safety === "warning"
+  const isDanger = safety === "danger"
+  const accentColor = isDanger ? "#ef4444" : isWarning ? "#f59e0b" : !protecting ? "rgba(252,253,255,0.25)" : "#11ff99"
+  const statusLabel = isDanger ? "Dangerous" : isWarning ? "Caution" : protecting ? "Protected" : "Paused"
+  const glowClass = isDanger ? "glow-red" : isWarning ? "glow-red" : protecting ? "glow-green" : "glow-blue"
 
   return (
     <div className="popup-container">
       <div className={`absolute inset-x-0 top-0 h-48 ${glowClass} pointer-events-none`} style={{ opacity: 0.2 }} />
-
       <div className="relative z-10 flex flex-col items-center flex-1 px-6 pt-8 pb-4">
-        {/* Brand header */}
         <BrandHeader />
 
-        {/* Shield icon */}
-        <div className="relative mb-4 mt-2">
+        {/* Shield */}
+        <div className="relative mb-3 mt-2">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center"
             style={{
@@ -210,12 +191,11 @@ function Popup() {
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
           </div>
-          {protecting && (
+          {protecting && isSafe && (
             <div className="absolute inset-0 rounded-2xl animate-ping opacity-15" style={{ border: `2px solid ${accentColor}` }} />
           )}
         </div>
 
-        {/* Status */}
         <h2 className="text-sm font-semibold text-ink tracking-tight">{statusLabel}</h2>
         <p className="text-[10px] text-sifix-text-50 mt-1">Transaction Shield</p>
 
@@ -229,10 +209,22 @@ function Popup() {
           </div>
         )}
 
-        {/* dApp badge */}
-        <div className="mt-2 px-2 py-0.5 rounded-full" style={{ background: "rgba(17, 255, 153, 0.08)", border: "1px solid rgba(17, 255, 153, 0.15)" }}>
-          <span className="text-[9px] font-medium" style={{ color: "#11ff99" }}>Web3 Detected</span>
+        {/* Safety badge */}
+        <div className="mt-2 px-2 py-0.5 rounded-full" style={{
+          background: isDanger ? "rgba(239,68,68,0.08)" : isWarning ? "rgba(245,158,11,0.08)" : "rgba(17,255,153,0.08)",
+          border: `1px solid ${isDanger ? "rgba(239,68,68,0.15)" : isWarning ? "rgba(245,158,11,0.15)" : "rgba(17,255,153,0.15)"}`
+        }}>
+          <span className="text-[9px] font-medium" style={{ color: accentColor }}>
+            {isDanger ? "Dangerous Site" : isWarning ? "Use Caution" : "Web3 Safe"}
+          </span>
         </div>
+
+        {/* Safety reason */}
+        {domainSafety.reason && (isDanger || isWarning) && (
+          <p className="mt-2 text-[10px] text-sifix-text-40 text-center max-w-[220px] leading-relaxed">
+            {domainSafety.reason}
+          </p>
+        )}
 
         {/* Protection toggle */}
         <div className="mt-4 w-full max-w-[260px]">
@@ -260,60 +252,74 @@ function Popup() {
           </button>
         </div>
 
-        {/* Wallet address */}
+        {/* Wallet */}
         <div className="mt-3 flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#11ff99" }} />
+          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: accentColor }} />
           <span className="text-[10px] text-sifix-text-40 font-mono">
             {connectedWallet ? connectedWallet.slice(0, 6) + "..." + connectedWallet.slice(-4) : ""}
           </span>
         </div>
 
-        {/* Dashboard link */}
-        <a
-          href={DAPP_DASHBOARD}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 text-[10px] text-accent-blue hover:text-white transition-colors font-medium flex items-center gap-1"
-        >
+        <a href={DAPP_DASHBOARD} target="_blank" rel="noopener noreferrer" className="mt-2 text-[10px] text-accent-blue hover:text-white transition-colors font-medium flex items-center gap-1">
           Open Dashboard
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-          </svg>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </a>
 
-        {/* Disconnect */}
-        <button
-          onClick={async () => {
-            await clearToken()
-            chrome.storage.local.remove("sifix_wallet")
-            setConnectedWallet(null)
-            setAuthState("disconnected")
-          }}
-          className="mt-auto text-[9px] text-sifix-text-30 hover:text-accent-red transition-colors cursor-pointer pb-1"
-        >
+        <button onClick={async () => { await clearToken(); chrome.storage.local.remove("sifix_wallet"); setConnectedWallet(null); setAuthState("disconnected") }} className="mt-auto text-[9px] text-sifix-text-30 hover:text-accent-red transition-colors cursor-pointer pb-1">
           Disconnect
         </button>
       </div>
-
       <Footer />
     </div>
   )
 }
 
 // ══════════════════════════════════════════
-// Shared Components
+// Sub-components
 // ══════════════════════════════════════════
 
 function BrandHeader() {
   return (
     <div className="flex items-center gap-2 mb-2">
       <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #3b9eff, #3b9eff)" }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       </div>
       <span className="text-sm font-semibold text-ink tracking-tight">SIFIX</span>
       <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: "rgba(59, 158, 255, 0.1)", color: "#3b9eff" }}>v0.2</span>
+    </div>
+  )
+}
+
+function InactiveShield({ isInternal, domain }: { isInternal: boolean; domain: string }) {
+  return (
+    <div className="flex flex-col items-center mt-2">
+      <div className="relative mb-4">
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(252,253,255,0.25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+      </div>
+      <h2 className="text-sm font-semibold text-sifix-text-60 tracking-tight">{isInternal ? "No Active Page" : "Inactive"}</h2>
+      <p className="text-[10px] text-sifix-text-40 mt-1 text-center max-w-[200px] leading-relaxed">
+        {isInternal ? "Navigate to a dApp to activate transaction protection." : "This is not a dApp. SIFIX activates automatically on Web3 applications."}
+      </p>
+      {domain && !isInternal && (
+        <div className="mt-3 px-3 py-1.5 rounded-full flex items-center gap-1.5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sifix-text-30"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span className="text-[10px] text-sifix-text-40 font-mono">{domain}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WalletFooter({ wallet, onDisconnect }: { wallet: string | null; onDisconnect: () => void }) {
+  return (
+    <div className="mt-auto flex flex-col items-center gap-2 pb-1">
+      <div className="flex items-center gap-1.5">
+        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#3b9eff" }} />
+        <span className="text-[10px] text-sifix-text-40 font-mono">{wallet ? wallet.slice(0, 6) + "..." + wallet.slice(-4) : ""}</span>
+      </div>
+      <button onClick={onDisconnect} className="text-[9px] text-sifix-text-30 hover:text-accent-red transition-colors cursor-pointer">Disconnect</button>
     </div>
   )
 }

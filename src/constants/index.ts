@@ -71,8 +71,8 @@ export const CHAIN_NAMES: Record<number, string> = {
   137: "Polygon",
   42161: "Arbitrum",
   10: "Optimism",
-  16600: "0G Newton Testnet",
-  16601: "0G Newton Mainnet",
+  16600: "0G Galileo Testnet",
+  16601: "0G Galileo Mainnet",
 }
 
 export const DEFAULT_SETTINGS = {

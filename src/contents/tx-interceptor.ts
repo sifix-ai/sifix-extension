@@ -214,6 +214,12 @@ function injectProxy(original: any): boolean {
                 const analysis = await analyzeViaBridge(tx)
                 hideLoading()
 
+                // If not authenticated or protection disabled — let tx through silently
+                if (analysis.error === "no_token" || analysis.error === "protection_disabled") {
+                  console.log("[SIFIX] Skipping analysis:", analysis.explanation)
+                  return target.request(args)
+                }
+
                 if (!analysis.success && analysis.error) {
                   console.warn("[SIFIX] Analysis failed, allowing:", analysis.error)
                   return target.request(args)

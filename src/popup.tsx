@@ -1,10 +1,17 @@
 import { useState, useEffect } from "react"
 import { ConnectScreen } from "./components/ConnectScreen"
 import { getToken, checkAuth, clearToken } from "./lib/api-client"
-import { usePageStatus } from "./hooks/usePageStatus"
+import { isDappUrl, isInternalPage } from "./utils/detect-dapp"
 import "./style.css"
 
 type AuthState = "loading" | "connected" | "disconnected"
+
+interface TabInfo {
+  url: string
+  domain: string
+  isDapp: boolean
+  isInternal: boolean
+}
 
 const DAPP_DASHBOARD = process.env.PLASMO_PUBLIC_DAPP_EXTENSION_URL || "http://localhost:3000/dashboard/extension"
 
@@ -12,8 +19,9 @@ function Popup() {
   const [authState, setAuthState] = useState<AuthState>("loading")
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null)
   const [protecting, setProtecting] = useState(true)
-  const pageStatus = usePageStatus()
+  const [tabInfo, setTabInfo] = useState<TabInfo>({ url: "", domain: "", isDapp: false, isInternal: true })
 
+  // --- Auth check ---
   const checkAuthState = async () => {
     const token = await getToken()
     if (!token) { setAuthState("disconnected"); return }
@@ -27,8 +35,29 @@ function Popup() {
     }
   }
 
-  useEffect(() => { checkAuthState() }, [])
+  // --- Tab detection ---
+  const detectTab = async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      const url = tab?.url || ""
+      const domain = url ? new URL(url).hostname : ""
+      setTabInfo({
+        url,
+        domain,
+        isDapp: isDappUrl(url),
+        isInternal: isInternalPage(url),
+      })
+    } catch {
+      setTabInfo({ url: "", domain: "", isDapp: false, isInternal: true })
+    }
+  }
 
+  useEffect(() => {
+    checkAuthState()
+    detectTab()
+  }, [])
+
+  // Listen for token from dapp
   useEffect(() => {
     const handler = (message: any) => {
       if (message.type === "SIFIX_TOKEN_RECEIVED" && message.token) checkAuthState()
@@ -37,6 +66,23 @@ function Popup() {
     return () => chrome.runtime.onMessage.removeListener(handler)
   }, [])
 
+  // Listen for protection toggle changes
+  useEffect(() => {
+    chrome.storage.local.get("sifixProtectionEnabled", (r) => {
+      if (typeof r.sifixProtectionEnabled === "boolean") setProtecting(r.sifixProtectionEnabled)
+    })
+    const onStorage = (changes: { [key: string]: chrome.storage.StorageChange }, area: string) => {
+      if (area === "local" && changes.sifixProtectionEnabled) {
+        setProtecting(!!changes.sifixProtectionEnabled.newValue)
+      }
+    }
+    chrome.storage.onChanged.addListener(onStorage)
+    return () => chrome.storage.onChanged.removeListener(onStorage)
+  }, [])
+
+  // ══════════════════════════════════════════
+  // STATE: Loading
+  // ══════════════════════════════════════════
   if (authState === "loading") {
     return (
       <div className="popup-container">
@@ -48,6 +94,9 @@ function Popup() {
     )
   }
 
+  // ══════════════════════════════════════════
+  // STATE: Disconnected (needs to activate via dApp)
+  // ══════════════════════════════════════════
   if (authState === "disconnected") {
     return (
       <div className="popup-container">
@@ -60,32 +109,96 @@ function Popup() {
     )
   }
 
-  // Connected state
-  const isSafe = pageStatus.safety === "safe" || pageStatus.safety === "unknown"
-  const isWarning = pageStatus.safety === "warning"
-  const accentColor = isSafe ? "#11ff99" : isWarning ? "#ff801f" : "#ff2047"
-  const statusLabel = pageStatus.safety === "safe" ? "Protected" : pageStatus.safety === "warning" ? "Caution" : pageStatus.safety === "danger" ? "Threat Detected" : "Active"
-  const glowClass = isSafe ? "glow-green" : isWarning ? "glow-blue" : "glow-red"
+  // ══════════════════════════════════════════
+  // STATE: Connected — Inactive (internal page / web2)
+  // ══════════════════════════════════════════
+  if (!tabInfo.isDapp || tabInfo.isInternal) {
+    return (
+      <div className="popup-container">
+        <div className="absolute inset-x-0 top-0 h-48 glow-blue pointer-events-none" style={{ opacity: 0.08 }} />
+
+        <div className="relative z-10 flex flex-col items-center flex-1 px-6 pt-8 pb-4">
+          {/* Brand header */}
+          <BrandHeader />
+
+          {/* Inactive shield */}
+          <div className="relative mb-4 mt-2">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.08)"
+              }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(252,253,255,0.25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+          </div>
+
+          <h2 className="text-sm font-semibold text-sifix-text-60 tracking-tight">
+            {tabInfo.isInternal ? "No Active Page" : "Inactive"}
+          </h2>
+          <p className="text-[10px] text-sifix-text-40 mt-1 text-center max-w-[200px] leading-relaxed">
+            {tabInfo.isInternal
+              ? "Navigate to a dApp to activate transaction protection."
+              : "This is not a dApp. SIFIX activates automatically on Web3 applications."}
+          </p>
+
+          {tabInfo.domain && !tabInfo.isInternal && (
+            <div className="mt-3 px-3 py-1.5 rounded-full flex items-center gap-1.5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sifix-text-30">
+                <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+              <span className="text-[10px] text-sifix-text-40 font-mono">{tabInfo.domain}</span>
+            </div>
+          )}
+
+          {/* Wallet info */}
+          <div className="mt-auto flex flex-col items-center gap-2 pb-1">
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#3b9eff" }} />
+              <span className="text-[10px] text-sifix-text-40 font-mono">
+                {connectedWallet ? connectedWallet.slice(0, 6) + "..." + connectedWallet.slice(-4) : ""}
+              </span>
+            </div>
+            <button
+              onClick={async () => {
+                await clearToken()
+                chrome.storage.local.remove("sifix_wallet")
+                setConnectedWallet(null)
+                setAuthState("disconnected")
+              }}
+              className="text-[9px] text-sifix-text-30 hover:text-accent-red transition-colors cursor-pointer"
+            >
+              Disconnect
+            </button>
+          </div>
+        </div>
+
+        <Footer />
+      </div>
+    )
+  }
+
+  // ══════════════════════════════════════════
+  // STATE: Connected — Active on dApp
+  // ══════════════════════════════════════════
+  const isSafe = protecting
+  const accentColor = protecting ? "#11ff99" : "rgba(252,253,255,0.25)"
+  const statusLabel = protecting ? "Active" : "Paused"
+  const glowClass = protecting ? "glow-green" : "glow-blue"
 
   return (
     <div className="popup-container">
-      {/* Top glow */}
-      <div className={`absolute inset-x-0 top-0 h-48 ${glowClass} pointer-events-none`} style={{ opacity: 0.25 }} />
+      <div className={`absolute inset-x-0 top-0 h-48 ${glowClass} pointer-events-none`} style={{ opacity: 0.2 }} />
 
       <div className="relative z-10 flex flex-col items-center flex-1 px-6 pt-8 pb-4">
         {/* Brand header */}
-        <div className="flex items-center gap-2 mb-6">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #3b9eff, #3b9eff)" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
-          </div>
-          <span className="text-sm font-semibold text-ink tracking-tight">SIFIX</span>
-          <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: "rgba(59, 158, 255, 0.1)", color: "#3b9eff" }}>v0.2</span>
-        </div>
+        <BrandHeader />
 
         {/* Shield icon */}
-        <div className="relative mb-4">
+        <div className="relative mb-4 mt-2">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center"
             style={{
@@ -97,32 +210,39 @@ function Popup() {
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
           </div>
-          {protecting && isSafe && (
-            <div
-              className="absolute inset-0 rounded-2xl animate-ping opacity-15"
-              style={{ border: `2px solid ${accentColor}` }}
-            />
+          {protecting && (
+            <div className="absolute inset-0 rounded-2xl animate-ping opacity-15" style={{ border: `2px solid ${accentColor}` }} />
           )}
         </div>
 
         {/* Status */}
         <h2 className="text-sm font-semibold text-ink tracking-tight">{statusLabel}</h2>
-        <p className="text-[10px] text-sifix-text-50 mt-1">Wallet Transaction Protection</p>
+        <p className="text-[10px] text-sifix-text-50 mt-1">Transaction Shield</p>
 
-        {pageStatus.domain && (
+        {/* Domain pill */}
+        {tabInfo.domain && (
           <div className="mt-3 px-3 py-1.5 rounded-full flex items-center gap-1.5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sifix-text-40">
               <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
             </svg>
-            <span className="text-[10px] text-sifix-text-50 font-mono">{pageStatus.domain}</span>
+            <span className="text-[10px] text-sifix-text-50 font-mono">{tabInfo.domain}</span>
           </div>
         )}
 
+        {/* dApp badge */}
+        <div className="mt-2 px-2 py-0.5 rounded-full" style={{ background: "rgba(17, 255, 153, 0.08)", border: "1px solid rgba(17, 255, 153, 0.15)" }}>
+          <span className="text-[9px] font-medium" style={{ color: "#11ff99" }}>Web3 Detected</span>
+        </div>
+
         {/* Protection toggle */}
-        <div className="mt-5 w-full max-w-[260px]">
+        <div className="mt-4 w-full max-w-[260px]">
           <button
-            onClick={() => setProtecting(!protecting)}
-            className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200"
+            onClick={() => {
+              const next = !protecting
+              setProtecting(next)
+              chrome.storage.local.set({ sifixProtectionEnabled: next })
+            }}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer"
             style={{
               backgroundColor: protecting ? "rgba(59, 158, 255, 0.06)" : "rgba(255, 255, 255, 0.03)",
               border: protecting ? "1px solid rgba(59, 158, 255, 0.15)" : "1px solid rgba(255, 255, 255, 0.06)"
@@ -134,20 +254,14 @@ function Popup() {
               </svg>
               <span className="text-xs text-sifix-text-70">TX Protection</span>
             </div>
-            <div
-              className="w-9 h-5 rounded-full relative transition-all duration-200"
-              style={{ backgroundColor: protecting ? "#3b9eff" : "rgba(255, 255, 255, 0.1)" }}
-            >
-              <div
-                className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all duration-200"
-                style={{ left: protecting ? "17px" : "2px" }}
-              />
+            <div className="w-9 h-5 rounded-full relative transition-all duration-200" style={{ backgroundColor: protecting ? "#3b9eff" : "rgba(255, 255, 255, 0.1)" }}>
+              <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all duration-200" style={{ left: protecting ? "17px" : "2px" }} />
             </div>
           </button>
         </div>
 
         {/* Wallet address */}
-        <div className="mt-4 flex items-center gap-1.5">
+        <div className="mt-3 flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#11ff99" }} />
           <span className="text-[10px] text-sifix-text-40 font-mono">
             {connectedWallet ? connectedWallet.slice(0, 6) + "..." + connectedWallet.slice(-4) : ""}
@@ -159,7 +273,7 @@ function Popup() {
           href={DAPP_DASHBOARD}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 text-[10px] text-accent-blue hover:text-white transition-colors font-medium flex items-center gap-1"
+          className="mt-2 text-[10px] text-accent-blue hover:text-white transition-colors font-medium flex items-center gap-1"
         >
           Open Dashboard
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -175,13 +289,31 @@ function Popup() {
             setConnectedWallet(null)
             setAuthState("disconnected")
           }}
-          className="mt-auto text-[9px] text-sifix-text-30 hover:text-accent-red transition-colors pb-1"
+          className="mt-auto text-[9px] text-sifix-text-30 hover:text-accent-red transition-colors cursor-pointer pb-1"
         >
           Disconnect
         </button>
       </div>
 
       <Footer />
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════
+// Shared Components
+// ══════════════════════════════════════════
+
+function BrandHeader() {
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #3b9eff, #3b9eff)" }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <span className="text-sm font-semibold text-ink tracking-tight">SIFIX</span>
+      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: "rgba(59, 158, 255, 0.1)", color: "#3b9eff" }}>v0.2</span>
     </div>
   )
 }

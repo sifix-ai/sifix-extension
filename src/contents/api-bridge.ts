@@ -5,7 +5,8 @@
  *
  * Flow:
  *   tx-interceptor (MAIN) → postMessage("SIFIX_ANALYZE_TX")
- *   → this script (ISOLATED) → fetch dApp API with Bearer token
+ *   → this script (ISOLATED) → check token + protection enabled
+ *   → if enabled: fetch dApp API with Bearer token
  *   → postMessage("SIFIX_ANALYSIS_RESULT") back to MAIN world
  */
 
@@ -37,6 +38,16 @@ async function getToken(): Promise<string | null> {
   }
 }
 
+async function isProtectionEnabled(): Promise<boolean> {
+  try {
+    const result = await chrome.storage.local.get(["sifixProtectionEnabled"])
+    // Default to true if not set (first install)
+    return typeof result.sifixProtectionEnabled === "boolean" ? result.sifixProtectionEnabled : true
+  } catch {
+    return true
+  }
+}
+
 // Listen for analysis requests from MAIN world
 window.addEventListener("message", async (event) => {
   if (event.source !== window) return
@@ -45,7 +56,27 @@ window.addEventListener("message", async (event) => {
   const { requestId, tx } = event.data
 
   try {
-    const [apiBase, token] = await Promise.all([getApiBase(), getToken()])
+    // Check if protection is enabled and token exists
+    const [apiBase, token, enabled] = await Promise.all([getApiBase(), getToken(), isProtectionEnabled()])
+
+    if (!enabled || !token) {
+      // Protection disabled or not authenticated — let tx through without analysis
+      window.postMessage({
+        type: "SIFIX_ANALYSIS_RESULT",
+        requestId,
+        result: {
+          success: false,
+          riskLevel: "UNKNOWN",
+          riskScore: 0,
+          confidence: 0,
+          recommendation: "PROCEED",
+          explanation: !token ? "Not authenticated. Activate via dApp." : "Protection paused by user.",
+          detectedThreats: [],
+          error: !token ? "no_token" : "protection_disabled",
+        },
+      }, "*")
+      return
+    }
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -92,7 +123,7 @@ window.addEventListener("message", async (event) => {
   }
 })
 
-// Signal to MAIN world that the bridge is ready.
+// Signal to MAIN world that the bridge is ready
 try {
   window.postMessage({ type: "SIFIX_BRIDGE_READY" }, "*")
 } catch {}

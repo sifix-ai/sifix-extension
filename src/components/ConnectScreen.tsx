@@ -14,17 +14,13 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
 
   useEffect(() => {
     const handler = (message: any) => {
-      if (message.type === "SIFIX_TOKEN_RECEIVED" && message.token) {
-        validateAndConnect()
-      }
+      if (message.type === "SIFIX_TOKEN_RECEIVED" && message.token) validateAndConnect()
     }
     chrome.runtime.onMessage.addListener(handler)
     return () => chrome.runtime.onMessage.removeListener(handler)
   }, [])
 
-  useEffect(() => {
-    checkExistingToken()
-  }, [])
+  useEffect(() => { checkExistingToken() }, [])
 
   const checkExistingToken = async () => {
     try {
@@ -79,37 +75,50 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
 
   return (
     <div className="flex flex-col items-center justify-center flex-1 px-8">
-      {/* Shield icon */}
-      <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ background: "rgba(139, 92, 246, 0.1)", border: "1px solid rgba(139, 92, 246, 0.15)" }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
+      {/* Top glow */}
+      <div className="absolute inset-x-0 top-0 h-64 glow-blue pointer-events-none" style={{ opacity: 0.15 }} />
+
+      {/* Shield icon — exact dapp pattern */}
+      <div className="relative mb-5">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+          style={{
+            background: "linear-gradient(135deg, #3b9eff, #3b9eff, #3b9eff)",
+          }}
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
       </div>
 
-      <h1 className="text-lg font-semibold text-sifix-text tracking-tight" style={{ fontFamily: '"DM Sans", system-ui, sans-serif' }}>
-        SIFIX
-      </h1>
-      <p className="text-[11px] text-sifix-text-40 mt-1 text-center leading-relaxed">
-        Wallet Transaction Protection
+      <h1 className="text-lg font-semibold text-ink tracking-tight">SIFIX</h1>
+      <p className="text-[11px] text-sifix-text-50 mt-1 text-center">
+        AI-Powered Wallet Security
       </p>
 
       {!showPaste ? (
         <div className="w-full max-w-[260px] mt-8 flex flex-col items-center gap-3">
+          {/* Primary button — dapp gradient pattern */}
           <button
             onClick={handleOpenDapp}
-            className="w-full py-3 rounded-xl text-sm font-medium text-white cursor-pointer transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
-            style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899)" }}
+            className="w-full h-10 rounded-xl text-sm font-medium text-white cursor-pointer transition-all duration-200 hover:shadow-lg hover:shadow-accent-blue/20 active:scale-[0.98]"
+            style={{
+              background: "linear-gradient(to right, rgba(59, 158, 255, 0.8), #3b9eff)",
+              border: "1px solid rgba(255, 255, 255, 0.15)"
+            }}
           >
             Activate via dApp
           </button>
 
-          <p className="text-[10px] text-sifix-text-40 text-center leading-relaxed">
+          <p className="text-[10px] text-sifix-text-40 text-center leading-relaxed max-w-[220px]">
             Open dApp dashboard to connect your wallet and activate the extension.
           </p>
 
+          {/* Ghost button */}
           <button
             onClick={() => setShowPaste(true)}
-            className="mt-1 text-[11px] text-sifix-text-40 hover:text-sifix-text-60 transition-colors cursor-pointer"
+            className="mt-1 h-8 px-4 rounded-xl text-[11px] text-sifix-text-50 cursor-pointer transition-all duration-200 hover:bg-white/[0.06] hover:text-sifix-text-70"
+            style={{ border: "1px solid rgba(255, 255, 255, 0.06)" }}
           >
             Paste token manually
           </button>
@@ -121,26 +130,27 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
             value={tokenInput}
             onChange={(e) => setTokenInput(e.target.value)}
             placeholder="sfx_..."
-            className="w-full px-3 py-2.5 rounded-xl border text-xs text-sifix-text font-mono outline-none transition-colors"
+            className="w-full px-3 py-2.5 rounded-xl text-xs text-ink font-mono outline-none transition-all duration-200 focus:ring-2 focus:ring-accent-blue focus:ring-offset-2 focus:ring-offset-canvas"
             style={{
-              backgroundColor: "#0a0118",
-              borderColor: "rgba(248, 247, 255, 0.06)"
+              backgroundColor: "#06060a",
+              border: "1px solid rgba(255, 255, 255, 0.06)"
             }}
-            onFocus={(e) => e.target.style.borderColor = "rgba(139, 92, 246, 0.3)"}
-            onBlur={(e) => e.target.style.borderColor = "rgba(248, 247, 255, 0.06)"}
           />
 
           <button
             onClick={handlePasteSubmit}
             disabled={!tokenInput.trim() || status === "validating"}
             className={
-              "w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-200 " +
+              "w-full h-10 rounded-xl text-sm font-medium transition-all duration-200 " +
               (!tokenInput.trim()
                 ? "opacity-30 cursor-not-allowed text-white"
-                : "text-white cursor-pointer hover:opacity-90 active:scale-[0.98]")
+                : "text-white cursor-pointer hover:shadow-lg hover:shadow-accent-blue/20 active:scale-[0.98]")
             }
             style={{
-              background: tokenInput.trim() ? "linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899)" : "rgba(255,255,255,0.05)"
+              background: tokenInput.trim()
+                ? "linear-gradient(to right, rgba(59, 158, 255, 0.8), #3b9eff)"
+                : "rgba(255, 255, 255, 0.04)",
+              border: "1px solid rgba(255, 255, 255, 0.15)"
             }}
           >
             {status === "validating" ? "Connecting..." : "Connect"}
@@ -156,7 +166,11 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
       )}
 
       {error && (
-        <p className="text-[11px] text-sifix-danger mt-3 text-center">{error}</p>
+        <div className="mt-3 p-2.5 rounded-xl text-[11px] text-accent-red text-center"
+          style={{ background: "rgba(255, 32, 71, 0.1)", border: "1px solid rgba(255, 32, 71, 0.2)" }}
+        >
+          {error}
+        </div>
       )}
     </div>
   )

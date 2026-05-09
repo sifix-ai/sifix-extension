@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,29 +7,54 @@
 @layer base {
   html, body {
     width: 340px;
-    min-height: 440px;
+    min-height: 460px;
     margin: 0;
     padding: 0;
-    background-color: #0a0118;
-    color: #f8f7ff;
-    font-family: "DM Sans", system-ui, sans-serif;
+    background-color: #000000;
+    color: #fcfdff;
+    font-family: "Inter", system-ui, sans-serif;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  ::-webkit-scrollbar { width: 3px; }
+  /* Scrollbar — Resend style */
+  ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.2); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb { background: #0a0a0c; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #101012; }
 }
 
 @layer utilities {
   .popup-container {
-    @apply w-[340px] min-h-[440px] bg-sifix-bg flex flex-col;
+    @apply w-[340px] min-h-[460px] bg-canvas flex flex-col;
     position: relative;
   }
 
+  /* Glassmorphic card — exact dapp pattern */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+  }
+
+  /* Glow effects */
+  .glow-blue {
+    background: radial-gradient(circle at top, rgba(59, 158, 255, 0.34) 0%, transparent 60%);
+  }
+
+  .glow-green {
+    background: radial-gradient(circle at top, rgba(17, 255, 153, 0.18) 0%, transparent 60%);
+  }
+
+  .glow-red {
+    background: radial-gradient(circle at top, rgba(255, 32, 71, 0.34) 0%, transparent 60%);
+  }
+
+  /* Spinner */
   .sifix-spinner {
-    @apply w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin;
+    @apply w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin;
   }
 }

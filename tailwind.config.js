@@ -4,73 +4,58 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        canvas: "#000000",
+        ink: "#fcfdff",
+        body: "rgba(252, 253, 255, 0.86)",
+        charcoal: "rgba(252, 253, 255, 0.7)",
+        "surface-card": "#0a0a0c",
+        "surface-elevated": "#101012",
+        "surface-deep": "#06060a",
+        hairline: "rgba(255, 255, 255, 0.06)",
+        "hairline-strong": "rgba(255, 255, 255, 0.14)",
+        "divider-soft": "rgba(255, 255, 255, 0.04)",
+        "accent-blue": "#3b9eff",
+        "accent-blue-glow": "rgba(59, 158, 255, 0.34)",
+        "accent-green": "#11ff99",
+        "accent-orange": "#ff801f",
+        "accent-red": "#ff2047",
+        "accent-yellow": "#ffc53d",
         sifix: {
-          // Premium dark canvas
-          bg: "#0a0118",
-          card: "#1a1625",
-          surface: "#2d1b4e",
-          border: "rgba(248, 247, 255, 0.06)",
-          // Brand palette
-          primary: "#8b5cf6",       // violet-500
-          "primary-light": "#a78bfa",
-          "primary-dark": "#6d28d9",
-          accent: "#ec4899",        // pink-500
-          indigo: "#6366f1",
-          cyan: "#06b6d4",
-          // Semantic
-          safe: "#22c55e",
-          warn: "#f59e0b",
-          danger: "#ef4444",
-          critical: "#991b1b",
-          // Text
-          text: "#f8f7ff",
-          "text-70": "rgba(248, 247, 255, 0.7)",
-          "text-60": "rgba(248, 247, 255, 0.6)",
-          "text-40": "rgba(248, 247, 255, 0.4)",
-          muted: "rgba(248, 247, 255, 0.5)",
+          bg: "#000000",
+          card: "#0a0a0c",
+          surface: "#101012",
+          border: "rgba(255, 255, 255, 0.06)",
+          "border-strong": "rgba(255, 255, 255, 0.14)",
+          safe: "#11ff99",
+          warn: "#ff801f",
+          danger: "#ff2047",
+          muted: "rgba(252, 253, 255, 0.5)",
+          text: "#fcfdff",
+          "text-86": "rgba(252, 253, 255, 0.86)",
+          "text-70": "rgba(252, 253, 255, 0.7)",
+          "text-60": "rgba(252, 253, 255, 0.6)",
+          "text-50": "rgba(252, 253, 255, 0.5)",
+          "text-40": "rgba(252, 253, 255, 0.4)",
+          "text-30": "rgba(252, 253, 255, 0.3)",
         },
       },
       fontFamily: {
-        display: ['"DM Serif Display"', "serif"],
-        body: ['"DM Sans"', "system-ui", "sans-serif"],
         sans: ['"Inter"', "system-ui", "sans-serif"],
+        display: ['"Playfair Display"', "Georgia", "serif"],
         mono: ['"Geist Mono"', "monospace"],
       },
       borderRadius: {
-        "2xl": "16px",
-        "3xl": "24px",
+        lg: "12px",
+        xl: "16px",
+        "2xl": "24px",
       },
       boxShadow: {
-        resend:
-          "rgba(139, 92, 246, 0.04) 0px 0px 0px 1px, rgba(10, 1, 24, 0.04) 0px 1px 1px -0.5px, rgba(10, 1, 24, 0.04) 0px 3px 3px -1.5px, rgba(10, 1, 24, 0.04) 0px 6px 6px -3px, rgba(139, 92, 246, 0.04) 0px 12px 12px -6px, rgba(139, 92, 246, 0.04) 0px 24px 24px -12px",
-        "resend-lg":
-          "rgba(139, 92, 246, 0.06) 0px 0px 0px 1px, rgba(10, 1, 24, 0.06) 0px 2px 2px -1px, rgba(10, 1, 24, 0.06) 0px 6px 6px -3px, rgba(10, 1, 24, 0.06) 0px 12px 12px -6px, rgba(139, 92, 246, 0.06) 0px 24px 24px -12px, rgba(139, 92, 246, 0.06) 0px 48px 48px -24px",
-        glow: "0 0 20px rgba(139, 92, 246, 0.3)",
-        "glow-pink": "0 0 20px rgba(236, 72, 153, 0.3)",
+        "accent-blue": "0 0 0 1px rgba(59, 158, 255, 0.1), 0 2px 4px rgba(0,0,0,0.3), 0 12px 24px rgba(0,0,0,0.4)",
+        "accent-blue-lg": "0 0 0 1px rgba(59, 158, 255, 0.15), 0 8px 16px rgba(0,0,0,0.4), 0 24px 48px rgba(59, 158, 255, 0.2)",
+        glow: "0 0 8px rgba(59, 158, 255, 0.6)",
       },
       animation: {
-        "blur-in": "blur-in 0.7s ease-out forwards",
-        "slide-up": "slideUp 0.3s ease-out",
         "pulse-slow": "pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
-      },
-      keyframes: {
-        "blur-in": {
-          "0%": { filter: "blur(12px)", opacity: "0", transform: "translateY(8px)" },
-          "100%": { filter: "blur(0)", opacity: "1", transform: "translateY(0)" },
-        },
-        slideUp: {
-          "0%": { opacity: "0", transform: "translateY(10px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
-        "pulse-glow": {
-          "0%, 100%": { boxShadow: "0 0 8px rgba(139,92,246,0.3)" },
-          "50%": { boxShadow: "0 0 20px rgba(139,92,246,0.6)" },
-        },
-      },
-      backgroundImage: {
-        "gradient-brand": "linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%)",
-        "gradient-brand-subtle": "linear-gradient(135deg, rgba(99,102,241,0.2) 0%, rgba(139,92,246,0.2) 50%, rgba(236,72,153,0.2) 100%)",
       },
     },
   },

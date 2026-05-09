@@ -33,6 +33,50 @@
 
 ## 🏗️ Architecture
 
+```mermaid
+graph TB
+    subgraph CHROME["Chrome Browser"]
+        subgraph BG["Background Service Worker"]
+            SCANNER[Domain Safety Scanner]
+            MSG[Message Handler]
+            BADGE[Badge Updater<br/>safe / warn / risk]
+            CACHE[Local Cache]
+            WALLET[Wallet State]
+            SETTINGS[Settings Manager]
+        end
+
+        subgraph CS["Content Scripts"]
+            TXI[tx-interceptor<br/>MAIN world<br/>Proxy ethereum.request]
+            APIB[api-bridge<br/>ISOLATED world<br/>chrome.storage + fetch]
+            BADGE_UI[sifix-badge<br/>Shield Overlay]
+            CHECKER[dapp-checker<br/>Warning Banners]
+            AUTHB[auth-bridge<br/>SIWE Token Receiver]
+        end
+
+        POPUP[Popup UI<br/>340x460px<br/>React 18]
+
+        DAPP[SIFIX dApp API<br/>/api/v1/*]
+        AI[AI Provider<br/>0G / OpenAI / Groq]
+    end
+
+    TXI <--> APIB
+    SCANNER --> BADGE
+    MSG <--> POPUP
+    APIB --> DAPP
+    DAPP --> AI
+    AUTHB --> CACHE
+    POPUP <--> BG
+
+    style BG fill:#1a1a2e,color:#fff
+    style CS fill:#16213e,color:#fff
+    style POPUP fill:#3b9eff,color:#fff
+    style DAPP fill:#0f3460,color:#fff
+    style AI fill:#a855f7,color:#fff
+```
+
+<details>
+<summary>📐 ASCII Version</summary>
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                        Chrome Browser                            │
@@ -86,6 +130,7 @@
 │                                               └──────────────┘   │
 └──────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -214,6 +259,43 @@ For development, load from `build/chrome-mv3-dev/` instead. Plasmo's dev server 
 
 Every time a tab loads or navigates, the background service worker automatically scans the domain:
 
+```mermaid
+flowchart TD
+    START([URL loads in tab]) --> TABS[Background detects tabs.onUpdated]
+    TABS --> AUTH{Authenticated?<br/>Protection enabled?}
+    AUTH -->|No| SKIP[Skip scan]
+    AUTH -->|Yes| L1{1. Session cache?}
+    L1 -->|Hit| BADGE[Update badge per tab]
+    L1 -->|Miss| L2{2. Local scam<br/>blacklist?}
+    L2 -->|Match| DANGER[Level: DANGER]
+    L2 -->|No match| L3{3. Local safe<br/>domain list?}
+    L3 -->|Match + low risk| SAFE[Level: SAFE]
+    L3 -->|No match| L4[4. SIFIX API<br/>/api/v1/check-domain]
+    L4 --> L4CHECK{Risk score?}
+    L4CHECK -->|isScam or ≥80| DANGER
+    L4CHECK -->|≥40| WARN[Level: WARNING]
+    L4CHECK -->|<40| SAFE
+    L4 -.->|API fail| L5[5. GoPlus phishing API]
+    L5 --> L5CHECK{phishing_site=1?}
+    L5CHECK -->|Yes| DANGER
+    L5CHECK -->|No| UNKNOWN[Level: UNKNOWN]
+    L4CHECK -->|No API result| L5
+    DANGER --> BADGE
+    WARN --> BADGE
+    SAFE --> BADGE
+    UNKNOWN --> BADGE
+    BADGE --> UI[Content scripts show:<br/>sifix-badge overlay + dapp-checker banner]
+
+    style DANGER fill:#ef4444,color:#fff
+    style WARN fill:#f59e0b,color:#000
+    style SAFE fill:#22c55e,color:#fff
+    style UNKNOWN fill:#6b7280,color:#fff
+    style SKIP fill:#374151,color:#fff
+```
+
+<details>
+<summary>📐 ASCII Version</summary>
+
 ```
 URL loads in tab
       │
@@ -259,10 +341,37 @@ Content scripts show:
   • dapp-checker.ts → warning banner for danger/warning
   • sifix-badge.tsx → floating shield chip
 ```
+</details>
 
 ### Transaction Interception Flow
 
 The extension intercepts Web3 requests **before** they reach MetaMask:
+
+```mermaid
+flowchart TD
+    START([User triggers TX on dApp<br/>e.g. clicks Swap]) --> TXI[tx-interceptor.js<br/>MAIN world Proxy<br/>around ethereum.request]
+    TXI --> ISTX{Is TX or<br/>SIGN method?}
+    ISTX -->|No| PASS[Pass through to<br/>original ethereum.request]
+    ISTX -->|Yes| POPUP_UI[Show pre-flight popup<br/>Simulate & Analyze /<br/>Proceed to Wallet / Cancel]
+    POPUP_UI -->|Cancel| REJECT[Throw error 4001<br/>user rejected]
+    POPUP_UI -->|Proceed| PASS
+    POPUP_UI -->|Analyze| LOADING[Show loading overlay<br/>0G Security Agent running...]
+    LOADING --> BRIDGE[api-bridge.ts<br/>ISOLATED world]
+    BRIDGE --> API[POST /api/v1/extension/analyze<br/>{from, to, data, value}]
+    API --> RESULT[Return analysis to MAIN world<br/>via postMessage]
+    RESULT --> MODAL[Show risk modal:<br/>• Risk level + score 0-100<br/>• AI explanation<br/>• Detected threats<br/>• 0G Storage proof]
+    MODAL -->|Block / Cancel| REJECT
+    MODAL -->|Proceed| PASS
+    PASS --> META([MetaMask processes TX])
+
+    style START fill:#22c55e,color:#fff
+    style META fill:#3b9eff,color:#fff
+    style REJECT fill:#ef4444,color:#fff
+    style API fill:#a855f7,color:#fff
+```
+
+<details>
+<summary>📐 ASCII Version</summary>
 
 ```
 User triggers TX on dApp (e.g., clicks "Swap")
@@ -298,6 +407,7 @@ Show risk modal with:
       ├── Block / Cancel → throw error code 4001
       └── Proceed → pass through to original ethereum.request()
 ```
+</details>
 
 **Intercepted methods:**
 - `eth_sendTransaction`
@@ -315,6 +425,28 @@ Show risk modal with:
 ### Authentication Flow
 
 The extension authenticates with the SIFIX dApp via SIWE (Sign-In with Ethereum):
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Popup
+    participant DApp
+    participant AuthBridge as auth-bridge.ts
+    participant Storage as chrome.storage
+
+    User->>Popup: 1. Clicks "Activate via dApp"
+    Popup->>DApp: 2. New tab opens /dashboard/extension
+    DApp->>DApp: 3a. POST /api/v1/auth/nonce → get nonce + message
+    DApp->>User: 3b. User signs message with wallet
+    DApp->>DApp: 3c. POST /api/v1/auth/verify → get JWT token
+    DApp->>AuthBridge: 4. postMessage({type: SIFIX_EXTENSION_TOKEN, token, walletAddress})
+    AuthBridge->>Storage: 5. Store token in chrome.storage.local
+    Storage-->>Popup: 6. Notify popup via chrome.runtime.sendMessage
+    Note over Popup: All subsequent API calls include<br/>Authorization: Bearer <token>
+```
+
+<details>
+<summary>📐 ASCII Version</summary>
 
 ```
 1. User clicks "Activate via dApp" in popup
@@ -340,6 +472,7 @@ The extension authenticates with the SIFIX dApp via SIWE (Sign-In with Ethereum)
       ▼
 6. All subsequent API calls include: Authorization: Bearer <token>
 ```
+</details>
 
 ---
 

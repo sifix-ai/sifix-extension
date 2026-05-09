@@ -1,30 +1,34 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   html, body {
-    width: 380px;
-    min-height: 540px;
+    width: 340px;
+    min-height: 440px;
     margin: 0;
     padding: 0;
-    background-color: #07080a;
-    color: #e5e7eb;
-    font-family: "Space Grotesk", system-ui, sans-serif;
+    background-color: #0a0118;
+    color: #f8f7ff;
+    font-family: "DM Sans", system-ui, sans-serif;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
+  ::-webkit-scrollbar { width: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.2); border-radius: 9999px; }
 }
 
 @layer utilities {
-  .sifix-card {
-    @apply bg-sifix-card border border-sifix-border rounded-xl p-3;
+  .popup-container {
+    @apply w-[340px] min-h-[440px] bg-sifix-bg flex flex-col;
+    position: relative;
   }
-  .sifix-gradient {
-    @apply bg-gradient-to-br from-sifix-primary to-sifix-primary-dark;
-  }
-  .sifix-glow {
-    box-shadow: 0 0 12px rgba(255,99,99,0.4);
-  }
+
   .sifix-spinner {
     @apply w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin;
   }

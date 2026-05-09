@@ -7,16 +7,14 @@ interface ConnectScreenProps {
 const DAPP_EXTENSION_URL = process.env.PLASMO_PUBLIC_DAPP_EXTENSION_URL || "http://localhost:3000/dashboard/extension"
 
 export function ConnectScreen({ onConnected }: ConnectScreenProps) {
-  const [mode, setMode] = useState<"main" | "paste">("main")
-  const [tokenInput, setTokenInput] = useState("")
   const [status, setStatus] = useState<"idle" | "validating" | "error">("idle")
   const [error, setError] = useState("")
+  const [showPaste, setShowPaste] = useState(false)
+  const [tokenInput, setTokenInput] = useState("")
 
-  // Listen for token from content script (auto-connect from dApp postMessage)
   useEffect(() => {
     const handler = (message: any) => {
       if (message.type === "SIFIX_TOKEN_RECEIVED" && message.token) {
-        // Token was saved by content script, just verify
         validateAndConnect()
       }
     }
@@ -24,7 +22,6 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
     return () => chrome.runtime.onMessage.removeListener(handler)
   }, [])
 
-  // Also check if token already stored (user might have connected while popup was closed)
   useEffect(() => {
     checkExistingToken()
   }, [])
@@ -46,11 +43,9 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
   const validateAndConnect = async () => {
     setStatus("validating")
     setError("")
-
     try {
       const { checkAuth } = await import("../lib/api-client")
       const result = await checkAuth()
-
       if (result.valid && result.walletAddress) {
         chrome.storage.local.set({ sifix_wallet: result.walletAddress })
         onConnected(result.walletAddress)
@@ -70,10 +65,8 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
 
   const handlePasteSubmit = async () => {
     if (!tokenInput.trim()) return
-
     setStatus("validating")
     setError("")
-
     try {
       const { setToken } = await import("../lib/api-client")
       await setToken(tokenInput.trim())
@@ -85,191 +78,86 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
   }
 
   return (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "32px 20px",
-      minHeight: "480px",
-      gap: "16px",
-    }}>
-      {/* Logo */}
-      <div style={{
-        width: "56px",
-        height: "56px",
-        borderRadius: "16px",
-        background: "linear-gradient(135deg, #ff6b6b, #4ecdc4)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "24px",
-        fontWeight: 700,
-        color: "#fff",
-      }}>
-        S
-      </div>
-      <div style={{
-        fontSize: "22px",
-        fontWeight: 700,
-        color: "#fff",
-        letterSpacing: "-0.5px",
-      }}>
-        SIFIX
-      </div>
-      <div style={{
-        fontSize: "12px",
-        color: "#94a3b8",
-        textAlign: "center",
-        maxWidth: "240px",
-      }}>
-        AI-Powered Wallet Security
+    <div className="flex flex-col items-center justify-center flex-1 px-8">
+      {/* Shield icon */}
+      <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ background: "rgba(139, 92, 246, 0.1)", border: "1px solid rgba(139, 92, 246, 0.15)" }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
       </div>
 
-      {/* Main: Open dApp */}
-      {mode === "main" && (
-        <>
+      <h1 className="text-lg font-semibold text-sifix-text tracking-tight" style={{ fontFamily: '"DM Sans", system-ui, sans-serif' }}>
+        SIFIX
+      </h1>
+      <p className="text-[11px] text-sifix-text-40 mt-1 text-center leading-relaxed">
+        Wallet Transaction Protection
+      </p>
+
+      {!showPaste ? (
+        <div className="w-full max-w-[260px] mt-8 flex flex-col items-center gap-3">
           <button
             onClick={handleOpenDapp}
-            style={{
-              marginTop: "20px",
-              padding: "14px 28px",
-              borderRadius: "12px",
-              border: "none",
-              background: "linear-gradient(135deg, #ff6b6b, #4ecdc4)",
-              color: "#fff",
-              fontSize: "15px",
-              fontWeight: 600,
-              cursor: "pointer",
-              width: "100%",
-              maxWidth: "280px",
-              transition: "opacity 0.2s",
-            }}
+            className="w-full py-3 rounded-xl text-sm font-medium text-white cursor-pointer transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
+            style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899)" }}
           >
-            Connect via dApp
+            Activate via dApp
           </button>
 
-          <div style={{
-            fontSize: "11px",
-            color: "#64748b",
-            textAlign: "center",
-            maxWidth: "260px",
-            lineHeight: "1.5",
-          }}>
-            Token otomatis dikirim ke extension setelah connect wallet di dApp.
-          </div>
+          <p className="text-[10px] text-sifix-text-40 text-center leading-relaxed">
+            Open dApp dashboard to connect your wallet and activate the extension.
+          </p>
 
           <button
-            onClick={() => setMode("paste")}
-            style={{
-              marginTop: "8px",
-              padding: "8px 16px",
-              borderRadius: "8px",
-              border: "1px solid #334155",
-              background: "transparent",
-              color: "#94a3b8",
-              fontSize: "12px",
-              cursor: "pointer",
-            }}
+            onClick={() => setShowPaste(true)}
+            className="mt-1 text-[11px] text-sifix-text-40 hover:text-sifix-text-60 transition-colors cursor-pointer"
           >
-            Sudah punya token? Paste di sini
+            Paste token manually
           </button>
-        </>
-      )}
-
-      {/* Paste Token Mode */}
-      {mode === "paste" && (
-        <>
-          <div style={{ width: "100%", maxWidth: "280px", marginTop: "16px" }}>
-            <label style={{
-              fontSize: "12px",
-              color: "#94a3b8",
-              display: "block",
-              marginBottom: "6px",
-            }}>
-              Paste API Token
-            </label>
-            <textarea
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-              placeholder="sfx_..."
-              rows={3}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "8px",
-                border: "1px solid #334155",
-                background: "#1e293b",
-                color: "#fff",
-                fontSize: "12px",
-                fontFamily: "monospace",
-                resize: "none",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
+        </div>
+      ) : (
+        <div className="w-full max-w-[260px] mt-6 flex flex-col items-center gap-2.5">
+          <input
+            type="text"
+            value={tokenInput}
+            onChange={(e) => setTokenInput(e.target.value)}
+            placeholder="sfx_..."
+            className="w-full px-3 py-2.5 rounded-xl border text-xs text-sifix-text font-mono outline-none transition-colors"
+            style={{
+              backgroundColor: "#0a0118",
+              borderColor: "rgba(248, 247, 255, 0.06)"
+            }}
+            onFocus={(e) => e.target.style.borderColor = "rgba(139, 92, 246, 0.3)"}
+            onBlur={(e) => e.target.style.borderColor = "rgba(248, 247, 255, 0.06)"}
+          />
 
           <button
             onClick={handlePasteSubmit}
             disabled={!tokenInput.trim() || status === "validating"}
+            className={
+              "w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-200 " +
+              (!tokenInput.trim()
+                ? "opacity-30 cursor-not-allowed text-white"
+                : "text-white cursor-pointer hover:opacity-90 active:scale-[0.98]")
+            }
             style={{
-              padding: "12px 24px",
-              borderRadius: "10px",
-              border: "none",
-              background: !tokenInput.trim() ? "#334155" : "#3b82f6",
-              color: !tokenInput.trim() ? "#64748b" : "#fff",
-              fontSize: "14px",
-              fontWeight: 600,
-              cursor: !tokenInput.trim() ? "not-allowed" : "pointer",
-              width: "100%",
-              maxWidth: "280px",
+              background: tokenInput.trim() ? "linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899)" : "rgba(255,255,255,0.05)"
             }}
           >
-            {status === "validating" ? "Validating..." : "Connect"}
+            {status === "validating" ? "Connecting..." : "Connect"}
           </button>
 
           <button
-            onClick={() => { setMode("main"); setError(""); setTokenInput("") }}
-            style={{
-              padding: "6px 12px",
-              border: "none",
-              background: "transparent",
-              color: "#64748b",
-              fontSize: "12px",
-              cursor: "pointer",
-            }}
+            onClick={() => { setShowPaste(false); setError(""); setTokenInput("") }}
+            className="text-[11px] text-sifix-text-40 hover:text-sifix-text-60 transition-colors cursor-pointer"
           >
-            Kembali
+            Back
           </button>
-        </>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div style={{
-          fontSize: "12px",
-          color: "#ef4444",
-          textAlign: "center",
-          padding: "8px 12px",
-          background: "rgba(239, 68, 68, 0.1)",
-          borderRadius: "8px",
-          maxWidth: "280px",
-        }}>
-          {error}
         </div>
       )}
 
-      {/* Footer */}
-      <div style={{
-        fontSize: "10px",
-        color: "#475569",
-        textAlign: "center",
-        marginTop: "auto",
-        paddingTop: "16px",
-      }}>
-        Powered by 0G Compute + Storage
-      </div>
+      {error && (
+        <p className="text-[11px] text-sifix-danger mt-3 text-center">{error}</p>
+      )}
     </div>
   )
 }

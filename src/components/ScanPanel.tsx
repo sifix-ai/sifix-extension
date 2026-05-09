@@ -33,7 +33,6 @@ export function ScanPanel() {
       } else if (type === "ens") {
         resp = await checkAddress(input.trim())
       } else {
-        // Could be address or contract — try address first
         resp = await checkAddress(input.trim())
       }
 
@@ -55,7 +54,7 @@ export function ScanPanel() {
   return (
     <div className="space-y-3 animate-slide-up">
       <div className="sifix-card">
-        <span className="text-xs text-sifix-muted uppercase tracking-wider block mb-2">
+        <span className="text-[10px] text-sifix-text-40 uppercase tracking-widest font-sans font-medium block mb-2">
           Scanner
         </span>
         <div className="flex gap-2">
@@ -66,10 +65,10 @@ export function ScanPanel() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleScan()}
               placeholder="Address, ENS, or domain..."
-              className="w-full bg-sifix-surface border border-sifix-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-sifix-muted/50 focus:outline-none focus:border-sifix-primary/50"
+              className="w-full bg-sifix-bg border border-white/[0.06] rounded-xl px-3 py-2.5 text-sm text-sifix-text placeholder:text-sifix-text-40 focus:outline-none focus:border-sifix-primary/40 transition-colors font-mono"
             />
             {input && (
-              <span className="absolute right-2 top-2 text-[10px] text-sifix-muted">
+              <span className="absolute right-2.5 top-3 text-[10px] text-sifix-text-40">
                 {typeLabel}
               </span>
             )}
@@ -78,9 +77,9 @@ export function ScanPanel() {
             onClick={handleScan}
             disabled={loading || !input.trim()}
             className={cn(
-              "px-4 rounded-lg text-sm font-medium transition-all",
-              "bg-sifix-primary hover:bg-sifix-primary-dark text-white",
-              (loading || !input.trim()) && "opacity-50 cursor-not-allowed"
+              "px-4 rounded-xl text-sm font-medium transition-all duration-200",
+              "sifix-gradient text-white hover:shadow-glow active:scale-[0.97]",
+              (loading || !input.trim()) && "opacity-40 cursor-not-allowed hover:shadow-none"
             )}
           >
             {loading ? <span className="sifix-spinner" /> : "Scan"}
@@ -90,8 +89,8 @@ export function ScanPanel() {
 
       {/* Error */}
       {error && (
-        <div className="sifix-card border-sifix-danger/30 bg-sifix-danger/10">
-          <p className="text-xs text-sifix-danger">❌ {error}</p>
+        <div className="sifix-card border-sifix-danger/20 bg-sifix-danger/5">
+          <p className="text-xs text-sifix-danger font-body">❌ {error}</p>
         </div>
       )}
 
@@ -99,13 +98,13 @@ export function ScanPanel() {
       {result && (
         <div className="sifix-card animate-slide-up">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-mono text-white">
+            <span className="text-xs font-mono text-sifix-text font-medium">
               {result.address ? shortenAddress(result.address) : result.domain}
             </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+            <span className="text-[10px] px-2.5 py-1 rounded-full font-semibold font-body"
               style={{
                 color: RISK_COLORS[result.riskLevel] || "#f59e0b",
-                backgroundColor: `${RISK_COLORS[result.riskLevel] || "#f59e0b"}20`,
+                backgroundColor: `${RISK_COLORS[result.riskLevel] || "#f59e0b"}15`,
               }}
             >
               {RISK_LABELS[result.riskLevel] || "Unknown"}
@@ -113,7 +112,7 @@ export function ScanPanel() {
           </div>
 
           {/* Risk score bar */}
-          <div className="h-2 bg-sifix-surface rounded-full overflow-hidden mb-3">
+          <div className="h-2 bg-sifix-bg rounded-full overflow-hidden mb-3 border border-white/[0.04]">
             <div
               className="h-full rounded-full transition-all duration-700"
               style={{
@@ -124,10 +123,10 @@ export function ScanPanel() {
           </div>
 
           {/* Details */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {result.isVerified !== undefined && (
               <div className="flex justify-between text-[11px]">
-                <span className="text-sifix-muted">Verified</span>
+                <span className="text-sifix-text-40">Verified</span>
                 <span className={result.isVerified ? "text-sifix-safe" : "text-sifix-danger"}>
                   {result.isVerified ? "✓ Yes" : "✗ No"}
                 </span>
@@ -135,25 +134,25 @@ export function ScanPanel() {
             )}
             {result.reportCount !== undefined && (
               <div className="flex justify-between text-[11px]">
-                <span className="text-sifix-muted">Reports</span>
-                <span className="text-white">{result.reportCount}</span>
+                <span className="text-sifix-text-40">Reports</span>
+                <span className="text-sifix-text">{result.reportCount}</span>
               </div>
             )}
             {result.category && (
               <div className="flex justify-between text-[11px]">
-                <span className="text-sifix-muted">Category</span>
-                <span className="text-white">{result.category}</span>
+                <span className="text-sifix-text-40">Category</span>
+                <span className="text-sifix-text">{result.category}</span>
               </div>
             )}
             {result.reason && (
-              <div className="mt-2 p-2 bg-sifix-surface rounded-lg">
-                <p className="text-[10px] text-sifix-muted">{result.reason}</p>
+              <div className="mt-2 p-2.5 bg-sifix-bg rounded-xl border border-white/[0.04]">
+                <p className="text-[10px] text-sifix-text-60 leading-relaxed">{result.reason}</p>
               </div>
             )}
             {result.isScam !== undefined && (
               <div className={cn(
-                "mt-2 p-2 rounded-lg text-center text-xs font-semibold",
-                result.isScam ? "bg-sifix-danger/20 text-sifix-danger" : "bg-sifix-safe/20 text-sifix-safe"
+                "mt-2 p-2.5 rounded-xl text-center text-xs font-semibold font-body",
+                result.isScam ? "bg-sifix-danger/10 text-sifix-danger border border-sifix-danger/20" : "bg-sifix-safe/10 text-sifix-safe border border-sifix-safe/20"
               )}>
                 {result.isScam ? "🚨 SCAM DETECTED" : "✅ NO THREATS FOUND"}
               </div>
@@ -162,13 +161,13 @@ export function ScanPanel() {
 
           {/* Tags */}
           {result.tags && result.tags.length > 0 && (
-            <div className="mt-3 pt-2 border-t border-sifix-border">
-              <span className="text-[10px] text-sifix-muted uppercase tracking-wider">Community Tags</span>
-              <div className="flex flex-wrap gap-1 mt-1">
+            <div className="mt-3 pt-3 border-t border-white/[0.04]">
+              <span className="text-[9px] text-sifix-text-40 uppercase tracking-widest font-sans font-medium">Community Tags</span>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {result.tags.map((tag: any, i: number) => (
                   <span
                     key={i}
-                    className="text-[9px] px-2 py-0.5 rounded-full bg-sifix-surface text-sifix-text"
+                    className="text-[9px] px-2 py-0.5 rounded-full bg-sifix-bg text-sifix-text-70 border border-white/[0.04] font-body"
                   >
                     {tag.tag}: {tag.label || tag.evidence}
                   </span>

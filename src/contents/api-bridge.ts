@@ -18,21 +18,21 @@ export const config: PlasmoCSConfig = {
   // No "world: MAIN" = runs in ISOLATED world with chrome API access
 }
 
+import { getApiBase, getToken } from "../lib/api"
+
 const DEFAULT_API = "http://localhost:3000/api/v1"
 
-async function getApiBase(): Promise<string> {
+async function getApiBaseSafe(): Promise<string> {
   try {
-    const result = await chrome.storage.local.get(["settings"])
-    return result.settings?.dappApiUrl || DEFAULT_API
+    return await getApiBase()
   } catch {
     return DEFAULT_API
   }
 }
 
-async function getToken(): Promise<string | null> {
+async function getTokenSafe(): Promise<string | null> {
   try {
-    const result = await chrome.storage.local.get(["sifix_token"])
-    return result.sifix_token || null
+    return await getToken()
   } catch {
     return null
   }
@@ -57,7 +57,11 @@ window.addEventListener("message", async (event) => {
 
   try {
     // Check if protection is enabled and token exists
-    const [apiBase, token, enabled] = await Promise.all([getApiBase(), getToken(), isProtectionEnabled()])
+    const [apiBase, token, enabled] = await Promise.all([
+      getApiBaseSafe(),
+      getTokenSafe(),
+      isProtectionEnabled(),
+    ])
 
     if (!enabled || !token) {
       // Protection disabled or not authenticated — let tx through without analysis
@@ -86,7 +90,7 @@ window.addEventListener("message", async (event) => {
       headers["Authorization"] = `Bearer ${token}`
     }
 
-    const resp = await fetch(`${apiBase}/extension/analyze`, {
+    const resp = await fetch(`${apiBase}/analyze`, {
       method: "POST",
       headers,
       body: JSON.stringify({

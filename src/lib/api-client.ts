@@ -58,7 +58,7 @@ export async function checkAuth(): Promise<{ valid: boolean; walletAddress?: str
 
 export async function extensionScan(address: string) {
   const base = await getApiBase()
-  const resp = await authFetch(`${base}/extension/scan`, {
+  const resp = await authFetch(`${base}/scan`, {
     method: "POST",
     body: JSON.stringify({ address }),
   })
@@ -67,21 +67,23 @@ export async function extensionScan(address: string) {
 
 export async function extensionAnalyze(payload: {
   from: string
-  to: string
+  to?: string
   data?: string
   value?: string
+  method?: string
+  typedData?: Record<string, any>
 }) {
   const base = await getApiBase()
-  const resp = await authFetch(`${base}/extension/analyze`, {
+  const resp = await authFetch(`${base}/analyze`, {
     method: "POST",
     body: JSON.stringify(payload),
   })
   return resp.json()
 }
 
-export async function extensionGetSettings() {
+export async function extensionGetSettings(walletAddress: string) {
   const base = await getApiBase()
-  const resp = await authFetch(`${base}/extension/settings`)
+  const resp = await authFetch(`${base}/settings/ai-provider?address=${walletAddress}`)
   return resp.json()
 }
 

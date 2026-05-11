@@ -10,6 +10,7 @@
 
 import { MSG, DEFAULT_SETTINGS, KNOWN_SCAM_DOMAINS, KNOWN_SAFE_DOMAINS } from "../constants"
 import type { WalletState, ExtensionSettings, SafetyLevel } from "../types"
+import { getToken, getApiBase } from "../lib/api"
 
 // ─── State ──────────────────────────────────────────
 let walletState: WalletState = { address: null, chainId: null, connected: false, balance: null }
@@ -187,24 +188,6 @@ function normalizeDomain(url: string): string {
     return new URL(url).hostname.replace(/^www\./, "")
   } catch {
     return url.replace(/^https?:\/\//, "").split("/")[0]?.replace(/^www\./, "") || ""
-  }
-}
-
-async function getToken(): Promise<string | null> {
-  try {
-    const result = await chrome.storage.local.get(["sifix_token"])
-    return result.sifix_token || null
-  } catch {
-    return null
-  }
-}
-
-async function getApiBase(): Promise<string> {
-  try {
-    const result = await chrome.storage.local.get(["settings"])
-    return result.settings?.dappApiUrl || DEFAULT_SETTINGS.dappApiUrl
-  } catch {
-    return DEFAULT_SETTINGS.dappApiUrl
   }
 }
 
@@ -443,7 +426,7 @@ async function handleGetTags(address: string) {
   const apiBase = await getApiBase()
 
   try {
-    const resp = await fetch(`${apiBase}/../address-tags?address=${encodeURIComponent(address)}&limit=20`)
+    const resp = await fetch(`${apiBase}/address-tags?address=${encodeURIComponent(address)}&limit=20`)
     if (resp.ok) {
       const json = await resp.json()
       return (json.data || json)?.data || []
@@ -458,7 +441,7 @@ async function handleSubmitTag(payload: any) {
   const apiBase = await getApiBase()
 
   try {
-    const resp = await fetch(`${apiBase}/../address-tags`, {
+    const resp = await fetch(`${apiBase}/address-tags`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify(payload),
@@ -478,7 +461,7 @@ async function handleVoteTag(tagId: string, direction: "up" | "down") {
 
   try {
     // Find the tag first to get its address
-    const resp = await fetch(`${apiBase}/../address-tags?limit=100`, {
+    const resp = await fetch(`${apiBase}/address-tags?limit=100`, {
       headers: { "Authorization": `Bearer ${token}` },
     })
     if (resp.ok) {
@@ -486,7 +469,7 @@ async function handleVoteTag(tagId: string, direction: "up" | "down") {
       const tags = json.data?.data || json.data || []
       const tag = tags.find((t: any) => t.id === tagId)
       if (tag?.address) {
-        const voteResp = await fetch(`${apiBase}/../address/${encodeURIComponent(tag.address)}/tags/${tagId}/vote`, {
+        const voteResp = await fetch(`${apiBase}/address/${encodeURIComponent(tag.address)}/tags/${tagId}/vote`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ direction }),
@@ -515,7 +498,7 @@ async function handleGetStats() {
   const apiBase = await getApiBase()
 
   try {
-    const resp = await fetch(`${apiBase}/../stats`)
+    const resp = await fetch(`${apiBase}/stats`)
     if (resp.ok) {
       const json = await resp.json()
       return json.data || json

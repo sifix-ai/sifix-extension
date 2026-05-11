@@ -3,57 +3,9 @@
  * All requests go through dApp API with Bearer token auth
  */
 
-// Default — overridden by settings from chrome.storage
-let API_BASE = "http://localhost:3000/api/v1"
+import { getToken, getApiBase, setToken, clearToken, getWalletFromToken } from "./api"
 
-// Load saved API base on init
-;(async () => {
-  try {
-    const result = await chrome.storage.local.get(["settings"])
-    if (result.settings?.dappApiUrl) {
-      API_BASE = result.settings.dappApiUrl
-    }
-  } catch {}
-})()
-
-async function getApiBase(): Promise<string> {
-  try {
-    const result = await chrome.storage.local.get(["settings"])
-    if (result.settings?.dappApiUrl) {
-      API_BASE = result.settings.dappApiUrl
-    }
-  } catch {}
-  return API_BASE
-}
-
-// Token storage helpers
-export async function getToken(): Promise<string | null> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["sifix_token"], (result) => {
-      resolve(result.sifix_token || null)
-    })
-  })
-}
-
-export async function setToken(token: string): Promise<void> {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ sifix_token: token }, resolve)
-  })
-}
-
-export async function clearToken(): Promise<void> {
-  return new Promise((resolve) => {
-    chrome.storage.local.remove("sifix_token", resolve)
-  })
-}
-
-export async function getWalletFromToken(): Promise<string | null> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["sifix_wallet"], (result) => {
-      resolve(result.sifix_wallet || null)
-    })
-  })
-}
+export { getToken, setToken, clearToken, getWalletFromToken }
 
 // Helper to make authenticated API calls
 async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {

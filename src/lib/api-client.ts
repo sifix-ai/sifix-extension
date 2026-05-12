@@ -95,7 +95,7 @@ export async function extensionSubmitTag(payload: {
   submittedBy: string
 }) {
   const base = await getApiBase()
-  const resp = await authFetch(`${base}/threats/report`, {
+  const resp = await authFetch(`${base}/threats`, {
     method: "POST",
     body: JSON.stringify(payload),
   })

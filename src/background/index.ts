@@ -234,7 +234,7 @@ async function handleCheckDapp(url: string): Promise<{ level: SafetyLevel; reaso
     const headers: Record<string, string> = {}
     if (token) headers["Authorization"] = `Bearer ${token}`
 
-    const resp = await fetch(`${apiBase}/check-domain?domain=${encodeURIComponent(hostname)}`, { headers })
+    const resp = await fetch(`${apiBase}/scam-domains/check?domain=${encodeURIComponent(hostname)}`, { headers })
     if (resp.ok) {
       const json = await resp.json()
       apiResult = json.data || json
@@ -424,12 +424,14 @@ async function handleCheckAddress(address: string) {
 
 async function handleGetTags(address: string) {
   const apiBase = await getApiBase()
+  const normalized = address.toLowerCase()
 
   try {
-    const resp = await fetch(`${apiBase}/address-tags?address=${encodeURIComponent(address)}&limit=20`)
+    const resp = await fetch(`${apiBase}/address/${encodeURIComponent(normalized)}/tags?limit=20`)
     if (resp.ok) {
       const json = await resp.json()
-      return (json.data || json)?.data || []
+      const payload = json.data || json
+      return payload?.tags || []
     }
   } catch { }
 
@@ -441,10 +443,13 @@ async function handleSubmitTag(payload: any) {
   const apiBase = await getApiBase()
 
   try {
-    const resp = await fetch(`${apiBase}/address-tags`, {
+    const normalized = (payload?.address || "").toLowerCase()
+    if (!normalized) return { success: false, error: "Missing address" }
+
+    const resp = await fetch(`${apiBase}/address/${encodeURIComponent(normalized)}/tags`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ tag: payload?.tag }),
     })
     if (resp.ok) {
       const json = await resp.json()
@@ -458,18 +463,21 @@ async function handleSubmitTag(payload: any) {
 async function handleVoteTag(tagId: string, direction: "up" | "down") {
   const token = await getToken()
   const apiBase = await getApiBase()
+  const wallet = walletState.address
+
+  if (!wallet) return { success: false, error: "Wallet not connected" }
 
   try {
-    // Find the tag first to get its address
-    const resp = await fetch(`${apiBase}/address-tags?limit=100`, {
+    // Fetch tags from current wallet address context, then find tagId
+    const resp = await fetch(`${apiBase}/address/${encodeURIComponent(wallet.toLowerCase())}/tags?limit=100`, {
       headers: { "Authorization": `Bearer ${token}` },
     })
     if (resp.ok) {
       const json = await resp.json()
-      const tags = json.data?.data || json.data || []
+      const tags = json.data?.tags || []
       const tag = tags.find((t: any) => t.id === tagId)
-      if (tag?.address) {
-        const voteResp = await fetch(`${apiBase}/address/${encodeURIComponent(tag.address)}/tags/${tagId}/vote`, {
+      if (tag) {
+        const voteResp = await fetch(`${apiBase}/address/${encodeURIComponent(wallet.toLowerCase())}/tags/${tagId}/vote`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ direction }),

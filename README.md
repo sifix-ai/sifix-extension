@@ -16,6 +16,13 @@
 
 ---
 
+## Latest Progress (May 2026)
+
+- End-to-end pipeline aligned with dApp onchain flow:
+  - report -> relay -> indexer -> reconcile.
+- Extension auth and API usage now aligned with strict dApp auth gating and live system status checks.
+- Prepared for sync-status display consumption (`localStatus`, `onchainStatus`) from dApp threat APIs.
+
 ## ✨ Key Features
 
 - **🔄 Auto Transaction Interception** — Hooks `window.ethereum.request()` before MetaMask processes the request, routing transactions through AI-powered risk analysis

@@ -253,7 +253,20 @@
               if (isTx || isSign) {
                 console.log("[SIFIX] ⚡ Intercepted:", method, params)
 
-                var tx = isTx ? (params[0] || {}) : {}
+                var tx
+                if (isTx) {
+                  tx = params[0] || {}
+                } else if (method === "personal_sign") {
+                  tx = { from: params[1], data: params[0], method: method }
+                } else if (method === "eth_sign") {
+                  tx = { from: params[0], data: params[1], method: method }
+                } else if (method === "eth_signTypedData" || method === "eth_signTypedData_v3" || method === "eth_signTypedData_v4") {
+                  tx = { from: params[0], data: JSON.stringify(params[1]), typedData: params[1], method: method }
+                } else if (method === "eth_getEncryptionPublicKey" || method === "eth_decrypt") {
+                  tx = { from: params[0], method: method }
+                } else {
+                  tx = { method: method }
+                }
 
                 // Step 1: Show intercept popup — user chooses action
                 var action = await showInterceptPopup(method, tx)

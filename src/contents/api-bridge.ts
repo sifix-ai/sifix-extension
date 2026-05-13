@@ -22,6 +22,15 @@ import { getApiBase, getToken } from "../lib/api"
 
 const DEFAULT_API = "http://localhost:3000/api/v1"
 
+interface TxRequest {
+  from?: string
+  to?: string
+  data?: string
+  value?: string
+  method?: string
+  typedData?: Record<string, any>
+}
+
 async function getApiBaseSafe(): Promise<string> {
   try {
     return await getApiBase()
@@ -53,7 +62,7 @@ window.addEventListener("message", async (event) => {
   if (event.source !== window) return
   if (event.data?.type !== "SIFIX_ANALYZE_TX") return
 
-  const { requestId, tx } = event.data
+  const { requestId, tx } = event.data as { requestId: string; tx: TxRequest }
 
   try {
     // Check if protection is enabled and token exists
@@ -98,6 +107,8 @@ window.addEventListener("message", async (event) => {
         to: tx.to,
         data: tx.data,
         value: tx.value,
+        method: tx.method,
+        typedData: tx.typedData,
       }),
     })
 

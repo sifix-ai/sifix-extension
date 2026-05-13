@@ -20,6 +20,8 @@ interface TxRequest {
   to?: string
   data?: string
   value?: string
+  method?: string
+  typedData?: Record<string, any>
 }
 
 interface AnalysisResult {
@@ -207,7 +209,20 @@ function injectProxy(original: any): boolean {
             const isSign = SIGN_METHODS.includes(method)
             if (isTx || isSign) {
               console.log("[SIFIX] Intercepted:", method)
-              const tx: TxRequest = isTx ? (params[0] || {}) : {}
+              let tx: TxRequest
+              if (isTx) {
+                tx = params[0] || {}
+              } else if (method === "personal_sign") {
+                tx = { from: params[1], data: params[0], method }
+              } else if (method === "eth_sign") {
+                tx = { from: params[0], data: params[1], method }
+              } else if (method === "eth_signTypedData" || method === "eth_signTypedData_v3" || method === "eth_signTypedData_v4") {
+                tx = { from: params[0], data: JSON.stringify(params[1]), typedData: params[1], method }
+              } else if (method === "eth_getEncryptionPublicKey" || method === "eth_decrypt") {
+                tx = { from: params[0], method }
+              } else {
+                tx = { method }
+              }
               const hideLoading = showLoading()
 
               try {

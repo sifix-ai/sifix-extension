@@ -18,10 +18,11 @@
 
 ## Latest Progress (May 2026)
 
-- End-to-end pipeline aligned with dApp onchain flow:
-  - report -> relay -> indexer -> reconcile.
-- Extension auth and API usage now aligned with strict dApp auth gating and live system status checks.
-- Prepared for sync-status display consumption (`localStatus`, `onchainStatus`) from dApp threat APIs.
+- Aligned extension API usage with latest dApp routes (no legacy `/extension/*` path assumptions).
+- Fixed transaction/tag/domain endpoint mapping to current dApp API surface.
+- Improved signature interception for `personal_sign`, `eth_sign`, and `eth_signTypedData*` payload extraction.
+- Prepared for prediction-review and action-protection demo flow backed by latest analytics dashboard.
+- Extension auth and API usage remain aligned with strict dApp auth gating and live system status checks.
 
 ## ✨ Key Features
 

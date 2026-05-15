@@ -240,95 +240,108 @@
   }
 
   // ─── Proxy Injection ──────────────────────────────────
-  function injectProxy(original) {
-    try {
-      var proxied = new Proxy(original, {
-        get: function (target, prop) {
-          if (prop === "request") {
-            return async function (args) {
-              var method = args.method
-              var params = args.params || []
-              var isTx = TX_METHODS.indexOf(method) !== -1
-              var isSign = SIGN_METHODS.indexOf(method) !== -1
-              if (isTx || isSign) {
-                console.log("[SIFIX] ⚡ Intercepted:", method, params)
+  var currentProvider = null
+  var wrappedProviders = new WeakMap()
 
-                var tx
-                if (isTx) {
-                  tx = params[0] || {}
-                } else if (method === "personal_sign") {
-                  tx = { from: params[1], data: params[0], method: method }
-                } else if (method === "eth_sign") {
-                  tx = { from: params[0], data: params[1], method: method }
-                } else if (method === "eth_signTypedData" || method === "eth_signTypedData_v3" || method === "eth_signTypedData_v4") {
-                  tx = { from: params[0], data: JSON.stringify(params[1]), typedData: params[1], method: method }
-                } else if (method === "eth_getEncryptionPublicKey" || method === "eth_decrypt") {
-                  tx = { from: params[0], method: method }
-                } else {
-                  tx = { method: method }
-                }
+  function buildWrappedProvider(original) {
+    if (!original || typeof original !== "object") return original
+    if (wrappedProviders.has(original)) return wrappedProviders.get(original)
 
-                // Step 1: Show intercept popup — user chooses action
-                var action = await showInterceptPopup(method, tx)
+    var proxied = new Proxy(original, {
+      get: function (target, prop) {
+        if (prop === "request") {
+          return async function (args) {
+            var method = args && args.method
+            var params = (args && args.params) || []
+            console.log("[SIFIX] request method:", method, "params:", params)
 
-                if (action === "cancel") {
-                  var err = new Error("Transaction blocked by SIFIX user decision")
-                  err.code = 4900
-                  err.source = "sifix"
-                  throw err
-                }
+            var isTx = TX_METHODS.indexOf(method) !== -1
+            var isSign = SIGN_METHODS.indexOf(method) !== -1
+            if (isTx || isSign) {
+              console.log("[SIFIX] ⚡ Intercepted:", method, params)
 
-                if (action === "analyze") {
-                  // Step 2: Run analysis
-                  var hideLoading = showLoading()
-                  try {
-                    var analysis = await analyzeTx(tx)
-                    hideLoading()
-
-                    if (!analysis.success || analysis.error) {
-                      var err2 = new Error("Analysis unavailable (" + (analysis.error || "unknown_error") + "). Request blocked.")
-                      err2.code = 4900
-                      err2.source = "sifix"
-                      throw err2
-                    }
-
-                    // Step 3: Show result — user decides
-                    var proceed = await showResult(method, tx, analysis)
-                    if (!proceed) {
-                      var err3 = new Error("Transaction blocked by SIFIX")
-                      err3.code = 4900
-                      err3.source = "sifix"
-                      throw err3
-                    }
-                  } catch (e) {
-                    hideLoading()
-                    if (e && (e.code === 4900 || e.source === "sifix")) throw e
-                    console.error("[SIFIX] Analysis/interceptor error (blocked):", e && e.message ? e.message : e)
-                    var err4 = new Error("SIFIX interceptor error. Request blocked.")
-                    err4.code = 4900
-                    err4.source = "sifix"
-                    throw err4
-                  }
-                }
-
-                // action === "proceed" → just fall through to original
-                console.log("[SIFIX] ✅ Passing to wallet")
+              var tx
+              if (isTx) {
+                tx = params[0] || {}
+              } else if (method === "personal_sign") {
+                tx = { from: params[1], data: params[0], method: method }
+              } else if (method === "eth_sign") {
+                tx = { from: params[0], data: params[1], method: method }
+              } else if (method === "eth_signTypedData" || method === "eth_signTypedData_v3" || method === "eth_signTypedData_v4") {
+                tx = { from: params[0], data: JSON.stringify(params[1]), typedData: params[1], method: method }
+              } else if (method === "eth_getEncryptionPublicKey" || method === "eth_decrypt") {
+                tx = { from: params[0], method: method }
+              } else {
+                tx = { from: params[0] && params[0].from, to: params[0] && params[0].to, data: params[0] && params[0].data, value: params[0] && params[0].value, method: method }
               }
 
-              return target.request(args)
-            }
-          }
+              var action = await showInterceptPopup(method, tx)
 
-          var value = target[prop]
-          return typeof value === "function" ? value.bind(target) : value
+              if (action === "cancel") {
+                var err = new Error("Transaction blocked by SIFIX user decision")
+                err.code = 4900
+                err.source = "sifix"
+                throw err
+              }
+
+              if (action === "analyze") {
+                var hideLoading = showLoading()
+                try {
+                  var analysis = await analyzeTx(tx)
+                  hideLoading()
+
+                  if (!analysis.success || analysis.error) {
+                    var err2 = new Error("Analysis unavailable (" + (analysis.error || "unknown_error") + "). Request blocked.")
+                    err2.code = 4900
+                    err2.source = "sifix"
+                    throw err2
+                  }
+
+                  var proceed = await showResult(method, tx, analysis)
+                  if (!proceed) {
+                    var err3 = new Error("Transaction blocked by SIFIX")
+                    err3.code = 4900
+                    err3.source = "sifix"
+                    throw err3
+                  }
+                } catch (e) {
+                  hideLoading()
+                  if (e && (e.code === 4900 || e.source === "sifix")) throw e
+                  console.error("[SIFIX] Analysis/interceptor error (blocked):", e && e.message ? e.message : e)
+                  var err4 = new Error("SIFIX interceptor error. Request blocked.")
+                  err4.code = 4900
+                  err4.source = "sifix"
+                  throw err4
+                }
+              }
+
+              console.log("[SIFIX] forwarding to wallet:", method)
+            }
+
+            return target.request(args)
+          }
         }
-      })
+
+        var value = target[prop]
+        return typeof value === "function" ? value.bind(target) : value
+      }
+    })
+
+    try { Object.defineProperty(proxied, "__sifixWrapped", { value: true, configurable: true }) } catch (_) {}
+    wrappedProviders.set(original, proxied)
+    return proxied
+  }
+
+  function installEthereumHook(provider) {
+    try {
+      if (!provider) return false
+      currentProvider = buildWrappedProvider(provider)
 
       Object.defineProperty(window, "ethereum", {
-        get: function () { return proxied },
+        get: function () { return currentProvider },
         set: function (newVal) {
-          console.log("[SIFIX] Provider re-injected, re-wrapping...")
-          injectProxy(newVal)
+          console.log("[SIFIX] Provider set/re-injected, re-wrapping...")
+          currentProvider = buildWrappedProvider(newVal)
         },
         configurable: true,
         enumerable: true,
@@ -345,23 +358,33 @@
   // ─── Wait for ethereum ────────────────────────────────
   function waitForEthereum() {
     if (window.ethereum) {
-      injectProxy(window.ethereum)
-      return
+      installEthereumHook(window.ethereum)
     }
 
-    // MetaMask fires this when ready
     window.addEventListener("ethereum#initialized", function () {
-      if (window.ethereum) injectProxy(window.ethereum)
-    }, { once: true })
+      if (window.ethereum) installEthereumHook(window.ethereum)
+    })
 
-    // Fallback poll
+    window.addEventListener("eip6963:announceProvider", function (event) {
+      try {
+        var provider = event && event.detail && event.detail.provider
+        if (provider) {
+          console.log("[SIFIX] EIP-6963 provider announced")
+          installEthereumHook(provider)
+        }
+      } catch (e) {
+        console.warn("[SIFIX] EIP-6963 hook failed:", e)
+      }
+    })
+
+    window.dispatchEvent(new Event("eip6963:requestProvider"))
+
     var tries = 0
     var poll = setInterval(function () {
       if (window.ethereum) {
-        clearInterval(poll)
-        injectProxy(window.ethereum)
+        installEthereumHook(window.ethereum)
       }
-      if (++tries > 150) clearInterval(poll) // 30s
+      if (++tries > 150) clearInterval(poll)
     }, 200)
   }
 

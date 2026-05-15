@@ -123,6 +123,41 @@ function showLoading(): () => void {
   return () => el.remove()
 }
 
+function sifixBlockError(message: string): Error & { code: number; source: string } {
+  const err = new Error(message) as Error & { code: number; source: string }
+  err.code = 4900
+  err.source = "sifix"
+  return err
+}
+
+function showDecisionModal(method: string, tx: TxRequest): Promise<"analyze" | "allow" | "block"> {
+  return new Promise((resolve) => {
+    document.getElementById("sifix-decision")?.remove()
+    const overlay = document.createElement("div")
+    overlay.id = "sifix-decision"
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(5,8,12,0.86);backdrop-filter:blur(12px);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:'Sora','Space Grotesk','Inter',ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif"
+    overlay.innerHTML = `<div style="background:linear-gradient(180deg,#0b0f14,#0f172a);border:1px solid rgba(148,163,184,0.18);border-radius:18px;padding:22px;max-width:460px;width:92%;color:#e2e8f0">
+      <div style="font-size:18px;font-weight:650;color:#f8fafc">Transaction captured</div>
+      <div style="font-size:12px;color:#94a3b8;margin-top:4px">Choose action before forwarding request to wallet.</div>
+      <div style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.12);border-radius:12px;padding:12px;margin-top:12px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0"><span style="color:#94a3b8">Method</span><span style="font-family:monospace">${method}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0"><span style="color:#94a3b8">From</span><span style="font-family:monospace">${tx.from || "-"}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0"><span style="color:#94a3b8">To</span><span style="font-family:monospace">${tx.to || "-"}</span></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+        <button id="sifix-choice-analyze" style="padding:11px 14px;border-radius:12px;border:1px solid #0ea5e9;background:#0ea5e9;color:#04121b;flex:1;min-width:120px;font-weight:600;cursor:pointer">Analyze first</button>
+        <button id="sifix-choice-allow" style="padding:11px 14px;border-radius:12px;border:1px solid #1f2a44;background:transparent;color:#cbd5e1;flex:1;min-width:120px;font-weight:600;cursor:pointer">Continue without analyze</button>
+        <button id="sifix-choice-block" style="padding:11px 14px;border-radius:12px;border:1px solid #ef4444;background:#ef4444;color:#fff;flex:1;min-width:120px;font-weight:600;cursor:pointer">Block</button>
+      </div>
+    </div>`
+    document.documentElement.appendChild(overlay)
+
+    document.getElementById("sifix-choice-analyze")!.onclick = () => { overlay.remove(); resolve("analyze") }
+    document.getElementById("sifix-choice-allow")!.onclick = () => { overlay.remove(); resolve("allow") }
+    document.getElementById("sifix-choice-block")!.onclick = () => { overlay.remove(); resolve("block") }
+  })
+}
+
 // ─── Risk Modal ─────────────────────────────────────
 function showRiskModal(method: string, tx: TxRequest, analysis: AnalysisResult): Promise<boolean> {
   return new Promise((resolve) => {
@@ -223,33 +258,32 @@ function injectProxy(original: any): boolean {
               } else {
                 tx = { method }
               }
-              const hideLoading = showLoading()
-
               try {
-                const analysis = await analyzeViaBridge(tx)
-                hideLoading()
+                const choice = await showDecisionModal(method, tx)
+                console.log("[SIFIX] Decision:", choice)
 
-                // If not authenticated or protection disabled — let tx through silently
-                if (analysis.error === "no_token" || analysis.error === "protection_disabled") {
-                  console.log("[SIFIX] Skipping analysis:", analysis.explanation)
-                  return target.request(args)
+                if (choice === "block") {
+                  throw sifixBlockError("Transaction blocked by SIFIX user decision")
                 }
 
-                if (!analysis.success && analysis.error) {
-                  console.warn("[SIFIX] Analysis failed, allowing:", analysis.error)
-                  return target.request(args)
-                }
+                if (choice === "analyze") {
+                  const hideLoading = showLoading()
+                  const analysis = await analyzeViaBridge(tx)
+                  hideLoading()
 
-                const proceed = await showRiskModal(method, tx, analysis)
-                if (!proceed) {
-                  const err: any = new Error("Transaction blocked by SIFIX Security Agent")
-                  err.code = 4001
-                  throw err
+                  if (!analysis.success || analysis.error) {
+                    throw sifixBlockError(`Analysis unavailable (${analysis.error || "unknown_error"}). Request blocked.`)
+                  }
+
+                  const proceed = await showRiskModal(method, tx, analysis)
+                  if (!proceed) {
+                    throw sifixBlockError("Transaction blocked by SIFIX Security Agent")
+                  }
                 }
               } catch (err: any) {
-                hideLoading()
-                if (err.code === 4001) throw err
-                console.warn("[SIFIX] Error, allowing tx:", err.message)
+                if (err?.code === 4900 || err?.source === "sifix") throw err
+                console.error("[SIFIX] Interceptor error (blocked):", err?.message || err)
+                throw sifixBlockError("SIFIX interceptor error. Request blocked.")
               }
             }
 

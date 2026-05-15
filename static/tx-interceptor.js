@@ -243,84 +243,172 @@
   var currentProvider = null
   var wrappedProviders = new WeakMap()
 
+  function interceptMethodCall(target, methodName, args) {
+    return (async function () {
+      var method = args && args.method
+      var params = (args && args.params) || []
+      console.log("[SIFIX] request method:", method, "via:", methodName, "params:", params)
+
+      var isTx = TX_METHODS.indexOf(method) !== -1
+      var isSign = SIGN_METHODS.indexOf(method) !== -1
+      if (isTx || isSign) {
+        console.log("[SIFIX] ⚡ Intercepted:", method, params)
+
+        var tx
+        if (isTx) {
+          tx = params[0] || {}
+        } else if (method === "personal_sign") {
+          tx = { from: params[1], data: params[0], method: method }
+        } else if (method === "eth_sign") {
+          tx = { from: params[0], data: params[1], method: method }
+        } else if (method === "eth_signTypedData" || method === "eth_signTypedData_v3" || method === "eth_signTypedData_v4") {
+          tx = { from: params[0], data: JSON.stringify(params[1]), typedData: params[1], method: method }
+        } else if (method === "eth_getEncryptionPublicKey" || method === "eth_decrypt") {
+          tx = { from: params[0], method: method }
+        } else {
+          tx = { from: params[0] && params[0].from, to: params[0] && params[0].to, data: params[0] && params[0].data, value: params[0] && params[0].value, method: method }
+        }
+
+        console.log("[SIFIX] modal open:", method)
+        var action = await showInterceptPopup(method, tx)
+        console.log("[SIFIX] decision:", action)
+
+        if (action === "cancel") {
+          var err = new Error("Transaction blocked by SIFIX user decision")
+          err.code = 4900
+          err.source = "sifix"
+          throw err
+        }
+
+        if (action === "analyze") {
+          var hideLoading = showLoading()
+          try {
+            var analysis = await analyzeTx(tx)
+            hideLoading()
+
+            if (!analysis.success || analysis.error) {
+              var err2 = new Error("Analysis unavailable (" + (analysis.error || "unknown_error") + "). Request blocked.")
+              err2.code = 4900
+              err2.source = "sifix"
+              throw err2
+            }
+
+            var proceed = await showResult(method, tx, analysis)
+            if (!proceed) {
+              var err3 = new Error("Transaction blocked by SIFIX")
+              err3.code = 4900
+              err3.source = "sifix"
+              throw err3
+            }
+          } catch (e) {
+            hideLoading()
+            if (e && (e.code === 4900 || e.source === "sifix")) throw e
+            console.error("[SIFIX] Analysis/interceptor error (blocked):", e && e.message ? e.message : e)
+            var err4 = new Error("SIFIX interceptor error. Request blocked.")
+            err4.code = 4900
+            err4.source = "sifix"
+            throw err4
+          }
+        }
+
+        console.log("[SIFIX] forwarding to wallet:", method)
+      }
+
+      return target.request(args)
+    })()
+  }
+
+  function patchDirectProviderMethods(provider) {
+    if (!provider || typeof provider !== "object") return provider
+    if (provider.__sifixDirectPatched) return provider
+
+    try {
+      var originalRequest = typeof provider.request === "function" ? provider.request.bind(provider) : null
+      if (originalRequest) {
+        Object.defineProperty(provider, "request", {
+          value: function (args) {
+            return interceptMethodCall({ request: originalRequest }, "request", args)
+          },
+          configurable: true,
+          writable: true,
+        })
+      }
+    } catch (e) {
+      console.warn("[SIFIX] Failed to patch provider.request directly:", e)
+    }
+
+    try {
+      if (typeof provider.send === "function") {
+        var originalSend = provider.send.bind(provider)
+        Object.defineProperty(provider, "send", {
+          value: function (methodOrPayload, paramsOrCallback) {
+            if (typeof methodOrPayload === "string") {
+              return interceptMethodCall({ request: function (args) { return originalSend(args.method, args.params) } }, "send", {
+                method: methodOrPayload,
+                params: Array.isArray(paramsOrCallback) ? paramsOrCallback : [],
+              })
+            }
+            return originalSend(methodOrPayload, paramsOrCallback)
+          },
+          configurable: true,
+          writable: true,
+        })
+      }
+    } catch (e) {
+      console.warn("[SIFIX] Failed to patch provider.send directly:", e)
+    }
+
+    try {
+      if (typeof provider.sendAsync === "function") {
+        var originalSendAsync = provider.sendAsync.bind(provider)
+        Object.defineProperty(provider, "sendAsync", {
+          value: function (payload, callback) {
+            var method = payload && payload.method
+            var params = payload && payload.params
+            interceptMethodCall({
+              request: function (args) {
+                return new Promise(function (resolve, reject) {
+                  originalSendAsync({
+                    id: payload && payload.id,
+                    jsonrpc: (payload && payload.jsonrpc) || "2.0",
+                    method: args.method,
+                    params: args.params,
+                  }, function (err, result) {
+                    if (err) reject(err)
+                    else resolve(result)
+                  })
+                })
+              }
+            }, "sendAsync", { method: method, params: params }).then(function (result) {
+              if (typeof callback === "function") callback(null, result)
+            }).catch(function (err) {
+              if (typeof callback === "function") callback(err)
+            })
+          },
+          configurable: true,
+          writable: true,
+        })
+      }
+    } catch (e) {
+      console.warn("[SIFIX] Failed to patch provider.sendAsync directly:", e)
+    }
+
+    try { Object.defineProperty(provider, "__sifixDirectPatched", { value: true, configurable: true }) } catch (_) {}
+    return provider
+  }
+
   function buildWrappedProvider(original) {
     if (!original || typeof original !== "object") return original
     if (original.__sifixWrapped) return original
     if (wrappedProviders.has(original)) return wrappedProviders.get(original)
 
+    patchDirectProviderMethods(original)
+
     var proxied = new Proxy(original, {
       get: function (target, prop) {
         if (prop === "request") {
           return async function (args) {
-            var method = args && args.method
-            var params = (args && args.params) || []
-            console.log("[SIFIX] request method:", method, "params:", params)
-
-            var isTx = TX_METHODS.indexOf(method) !== -1
-            var isSign = SIGN_METHODS.indexOf(method) !== -1
-            if (isTx || isSign) {
-              console.log("[SIFIX] ⚡ Intercepted:", method, params)
-
-              var tx
-              if (isTx) {
-                tx = params[0] || {}
-              } else if (method === "personal_sign") {
-                tx = { from: params[1], data: params[0], method: method }
-              } else if (method === "eth_sign") {
-                tx = { from: params[0], data: params[1], method: method }
-              } else if (method === "eth_signTypedData" || method === "eth_signTypedData_v3" || method === "eth_signTypedData_v4") {
-                tx = { from: params[0], data: JSON.stringify(params[1]), typedData: params[1], method: method }
-              } else if (method === "eth_getEncryptionPublicKey" || method === "eth_decrypt") {
-                tx = { from: params[0], method: method }
-              } else {
-                tx = { from: params[0] && params[0].from, to: params[0] && params[0].to, data: params[0] && params[0].data, value: params[0] && params[0].value, method: method }
-              }
-
-              var action = await showInterceptPopup(method, tx)
-              console.log("[SIFIX] decision:", action)
-
-              if (action === "cancel") {
-                var err = new Error("Transaction blocked by SIFIX user decision")
-                err.code = 4900
-                err.source = "sifix"
-                throw err
-              }
-
-              if (action === "analyze") {
-                var hideLoading = showLoading()
-                try {
-                  var analysis = await analyzeTx(tx)
-                  hideLoading()
-
-                  if (!analysis.success || analysis.error) {
-                    var err2 = new Error("Analysis unavailable (" + (analysis.error || "unknown_error") + "). Request blocked.")
-                    err2.code = 4900
-                    err2.source = "sifix"
-                    throw err2
-                  }
-
-                  var proceed = await showResult(method, tx, analysis)
-                  if (!proceed) {
-                    var err3 = new Error("Transaction blocked by SIFIX")
-                    err3.code = 4900
-                    err3.source = "sifix"
-                    throw err3
-                  }
-                } catch (e) {
-                  hideLoading()
-                  if (e && (e.code === 4900 || e.source === "sifix")) throw e
-                  console.error("[SIFIX] Analysis/interceptor error (blocked):", e && e.message ? e.message : e)
-                  var err4 = new Error("SIFIX interceptor error. Request blocked.")
-                  err4.code = 4900
-                  err4.source = "sifix"
-                  throw err4
-                }
-              }
-
-              console.log("[SIFIX] forwarding to wallet:", method)
-            }
-
-            return target.request(args)
+            return interceptMethodCall(target, "request", args)
           }
         }
 
@@ -337,6 +425,10 @@
   function installEthereumHook(provider) {
     try {
       if (!provider) return false
+      if (provider.providers && Array.isArray(provider.providers)) {
+        provider.providers = provider.providers.map(function (p) { return patchDirectProviderMethods(p) })
+      }
+      patchDirectProviderMethods(provider)
       currentProvider = buildWrappedProvider(provider)
 
       Object.defineProperty(window, "ethereum", {

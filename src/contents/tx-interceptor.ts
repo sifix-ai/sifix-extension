@@ -9,7 +9,7 @@
 import type { PlasmoCSConfig } from "plasmo"
 
 export const config: PlasmoCSConfig = {
-  matches: ["<all_urls>"],
+  matches: ["https://example.invalid/*"],
   world: "MAIN",
   run_at: "document_start"
 }

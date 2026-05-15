@@ -30,12 +30,21 @@ function maybeInjectInterceptor(details: chrome.webNavigation.WebNavigationCallb
   if (details.frameId !== 0) return
   if (!details.url || !details.url.startsWith("http")) return
 
-  chrome.scripting.executeScript({
-    target: { tabId: details.tabId },
-    files: ["tx-interceptor.js"],
-    world: "MAIN" as any,
-    injectImmediately: true,
-  }).catch(() => { })
+  chrome.storage.local.get(["sifix_token", "sifixProtectionEnabled"], (result) => {
+    const hasToken = Boolean(result.sifix_token)
+    const enabled = typeof result.sifixProtectionEnabled === "boolean" ? result.sifixProtectionEnabled : true
+
+    if (!hasToken || !enabled) {
+      return
+    }
+
+    chrome.scripting.executeScript({
+      target: { tabId: details.tabId },
+      files: ["tx-interceptor.js"],
+      world: "MAIN" as any,
+      injectImmediately: true,
+    }).catch(() => { })
+  })
 }
 
 chrome.webNavigation?.onBeforeNavigate?.addListener(maybeInjectInterceptor)

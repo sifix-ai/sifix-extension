@@ -245,6 +245,7 @@
 
   function buildWrappedProvider(original) {
     if (!original || typeof original !== "object") return original
+    if (original.__sifixWrapped) return original
     if (wrappedProviders.has(original)) return wrappedProviders.get(original)
 
     var proxied = new Proxy(original, {
@@ -276,6 +277,7 @@
               }
 
               var action = await showInterceptPopup(method, tx)
+              console.log("[SIFIX] decision:", action)
 
               if (action === "cancel") {
                 var err = new Error("Transaction blocked by SIFIX user decision")

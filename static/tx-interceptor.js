@@ -272,8 +272,9 @@
                 var action = await showInterceptPopup(method, tx)
 
                 if (action === "cancel") {
-                  var err = new Error("Transaction cancelled by user")
-                  err.code = 4001
+                  var err = new Error("Transaction blocked by SIFIX user decision")
+                  err.code = 4900
+                  err.source = "sifix"
                   throw err
                 }
 
@@ -284,17 +285,29 @@
                     var analysis = await analyzeTx(tx)
                     hideLoading()
 
+                    if (!analysis.success || analysis.error) {
+                      var err2 = new Error("Analysis unavailable (" + (analysis.error || "unknown_error") + "). Request blocked.")
+                      err2.code = 4900
+                      err2.source = "sifix"
+                      throw err2
+                    }
+
                     // Step 3: Show result — user decides
                     var proceed = await showResult(method, tx, analysis)
                     if (!proceed) {
-                      var err2 = new Error("Transaction blocked by SIFIX")
-                      err2.code = 4001
-                      throw err2
+                      var err3 = new Error("Transaction blocked by SIFIX")
+                      err3.code = 4900
+                      err3.source = "sifix"
+                      throw err3
                     }
                   } catch (e) {
                     hideLoading()
-                    if (e.code === 4001) throw e
-                    console.warn("[SIFIX] Analysis error:", e.message)
+                    if (e && (e.code === 4900 || e.source === "sifix")) throw e
+                    console.error("[SIFIX] Analysis/interceptor error (blocked):", e && e.message ? e.message : e)
+                    var err4 = new Error("SIFIX interceptor error. Request blocked.")
+                    err4.code = 4900
+                    err4.source = "sifix"
+                    throw err4
                   }
                 }
 

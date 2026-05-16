@@ -1,14 +1,14 @@
 # 🛡️ SIFIX Extension v0.2.0
 
-**AI-Powered Wallet Security for Web3**
+**Intercept-first wallet security for Web3**
 
-Protect your crypto transactions with real-time AI analysis powered by SIFIX and 0G Network.
+Protect wallet actions with intercept-first analysis powered by SIFIX, 0G Chain, 0G Compute, 0G Storage, and 0G Agentic ID.
 
 ---
 
 ## 📥 Download
 
-**[⬇️ Download sifix-extension-v0.2.0.zip](https://github.com/YOUR_ORG/sifix-extension/releases/download/v0.2.0/sifix-extension-v0.2.0.zip)**
+**[⬇️ Download sifix-extension-v0.2.0.zip](https://github.com/sifix-ai/sifix-extension/releases/download/v0.2.0/sifix-extension-v0.2.0.zip)**
 
 ---
 
@@ -144,7 +144,7 @@ Protect your crypto transactions with real-time AI analysis powered by SIFIX and
 
 ### Build from Source
 ```bash
-git clone https://github.com/YOUR_ORG/sifix-extension.git
+git clone https://github.com/sifix-ai/sifix-extension.git
 cd sifix-extension
 npm install
 npm run build
@@ -179,10 +179,10 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ## 📞 Support
 
-- **🐛 Bug Reports** - [GitHub Issues](https://github.com/YOUR_ORG/sifix-extension/issues)
+- **🐛 Bug Reports** - [GitHub Issues](https://github.com/sifix-ai/sifix-extension/issues)
 - **💬 Discord** - [Join our community](https://discord.gg/sifix)
 - **📧 Email** - support@sifix.ai
-- **📖 Docs** - [docs.sifix.ai](https://docs.sifix.ai)
+- **📖 Docs** - [sifix-docs.vercel.app](https://sifix-docs.vercel.app/)
 
 ---
 

@@ -4,7 +4,7 @@
 
 ### ✨ Core Features
 - **Transaction Interception** - Intercepts wallet transactions before execution
-- **AI-Powered Analysis** - Real-time risk analysis using SIFIX AI API
+- **AI Analysis Pipeline** - Real-time risk analysis using current SIFIX dApp routes and 0G-backed inference
 - **Transaction Simulation** - Simulates transactions to detect potential threats
 - **Risk Scoring** - Comprehensive risk assessment (0-100 scale)
 - **Threat Detection** - Identifies phishing, scams, and malicious contracts
@@ -214,9 +214,9 @@ We welcome contributions! Please:
 ## 📞 Support
 
 - **Issues** - Report bugs on GitHub Issues
-- **Discord** - Join our community (link)
+- **Discord** - https://discord.gg/sifix
 - **Email** - support@sifix.ai
-- **Docs** - https://docs.sifix.ai
+- **Docs** - https://sifix-docs.vercel.app/
 
 ---
 

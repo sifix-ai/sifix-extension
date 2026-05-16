@@ -6,11 +6,11 @@
   <img src="https://img.shields.io/badge/network-0G_Galileo_Testnet-cyan" alt="0G Network" />
 </p>
 
-<h1 align="center">🛡️ SIFIX Extension — AI-Powered Wallet Security</h1>
+<h1 align="center">🛡️ SIFIX Extension — Intercept-First Wallet Security</h1>
 
 <p align="center">
-  <strong>Browser extension component of <a href="https://github.com/mula-labs/sifix">SIFIX</a></strong><br/>
-  Autonomous AI agent that simulates and analyzes blockchain transactions <em>before</em> they reach your wallet.<br/>
+  <strong>Browser extension component of <a href="https://github.com/sifix-ai">SIFIX</a></strong><br/>
+  Intercept-first security layer that simulates and analyzes blockchain transactions <em>before</em> they reach your wallet.<br/>
   Built by <a href="https://mula.labs">Mula Labs</a> · Powered by <a href="https://0g.ai">0G</a> Compute + Storage
 </p>
 
@@ -205,13 +205,13 @@ sifix-extension/
 - **npm** or **pnpm**
 - **Chrome** 116+ (Manifest V3 support)
 - **MetaMask** or another Web3 wallet extension
-- **SIFIX dApp** running locally or deployed (see [sifix-dapp](https://github.com/mula-labs/sifix-dapp))
+- **SIFIX dApp** running locally or deployed (see [sifix-dapp](https://github.com/sifix-ai/sifix-dapp))
 
 ### Installation
 
 ```bash
 # Clone the monorepo
-git clone https://github.com/mula-labs/sifix-repos.git
+git clone https://github.com/sifix-ai/sifix-repos.git
 cd sifix-repos/sifix-extension
 
 # Install dependencies (includes @sifix/agent via file:../sifix-agent)

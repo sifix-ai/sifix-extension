@@ -8,7 +8,7 @@ Protect wallet actions with intercept-first analysis powered by SIFIX, 0G Chain,
 
 ## 📥 Download
 
-**[⬇️ Download sifix-extension-v0.2.0.zip](https://github.com/YOUR_ORG/sifix-extension/releases/download/v0.2.0/sifix-extension-v0.2.0.zip)**
+**[⬇️ Download sifix-extension-v0.2.0.zip](https://github.com/sifix-ai/sifix-extension/releases/download/v0.2.0/sifix-extension-v0.2.0.zip)**
 
 ---
 
@@ -144,7 +144,7 @@ Protect wallet actions with intercept-first analysis powered by SIFIX, 0G Chain,
 
 ### Build from Source
 ```bash
-git clone https://github.com/YOUR_ORG/sifix-extension.git
+git clone https://github.com/sifix-ai/sifix-extension.git
 cd sifix-extension
 npm install
 npm run build
@@ -179,7 +179,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ## 📞 Support
 
-- **🐛 Bug Reports** - [GitHub Issues](https://github.com/YOUR_ORG/sifix-extension/issues)
+- **🐛 Bug Reports** - [GitHub Issues](https://github.com/sifix-ai/sifix-extension/issues)
 - **💬 Discord** - [Join our community](https://discord.gg/sifix)
 - **📧 Email** - support@sifix.ai
 - **📖 Docs** - [docs.sifix.ai](https://docs.sifix.ai)

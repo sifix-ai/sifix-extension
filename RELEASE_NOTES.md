@@ -214,9 +214,9 @@ We welcome contributions! Please:
 ## 📞 Support
 
 - **Issues** - Report bugs on GitHub Issues
-- **Discord** - Join our community (link)
+- **Discord** - https://discord.gg/sifix
 - **Email** - support@sifix.ai
-- **Docs** - https://docs.sifix.ai
+- **Docs** - https://sifix-docs.vercel.app/
 
 ---
 

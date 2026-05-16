@@ -182,7 +182,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 - **🐛 Bug Reports** - [GitHub Issues](https://github.com/sifix-ai/sifix-extension/issues)
 - **💬 Discord** - [Join our community](https://discord.gg/sifix)
 - **📧 Email** - support@sifix.ai
-- **📖 Docs** - [docs.sifix.ai](https://docs.sifix.ai)
+- **📖 Docs** - [sifix-docs.vercel.app](https://sifix-docs.vercel.app/)
 
 ---
 

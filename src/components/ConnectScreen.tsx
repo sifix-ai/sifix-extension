@@ -11,6 +11,7 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
   const [error, setError] = useState("")
   const [showPaste, setShowPaste] = useState(false)
   const [tokenInput, setTokenInput] = useState("")
+  const logoUrl = chrome.runtime.getURL('assets/sifix-white.png')
 
   useEffect(() => {
     const handler = (message: any) => {
@@ -33,7 +34,7 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
           onConnected(result.walletAddress)
         }
       }
-    } catch {}
+    } catch { }
   }
 
   const validateAndConnect = async () => {
@@ -79,14 +80,7 @@ export function ConnectScreen({ onConnected }: ConnectScreenProps) {
       <div className="absolute inset-x-0 top-0 h-64 glow-blue pointer-events-none" style={{ opacity: 0.12 }} />
 
       {/* Brand */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #3b9eff, #3b9eff)" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-        </div>
-        <span className="text-lg font-semibold text-ink tracking-tight">SIFIX</span>
-      </div>
+      <img src={logoUrl} alt="SIFIX" width={140} height={100} />
 
       <p className="text-[11px] text-sifix-text-50 text-center leading-relaxed max-w-[220px] mb-1">
         Transaction Shield

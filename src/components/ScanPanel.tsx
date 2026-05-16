@@ -4,6 +4,7 @@ import type { ScanResult, DomainCheckResult, ContractScanResult } from "../types
 import { RISK_COLORS, RISK_LABELS } from "../constants"
 import { shortenAddress } from "../utils/format"
 import { cn } from "../utils/cn"
+import { SifixIcon } from "./SifixIcon"
 
 export function ScanPanel() {
   const [input, setInput] = useState("")
@@ -51,6 +52,12 @@ export function ScanPanel() {
   const inputType = detectType(input)
   const typeLabel = inputType === "domain" ? "🌐 Domain" : inputType === "ens" ? "📛 ENS" : "📍 Address"
 
+  const TypeIcon = () => {
+    if (inputType === "domain") return <span>🌐</span>
+    if (inputType === "ens") return <span>📛</span>
+    return <SifixIcon size={12} />
+  }
+
   return (
     <div className="space-y-3 animate-slide-up">
       <div className="sifix-card">
@@ -68,8 +75,8 @@ export function ScanPanel() {
               className="w-full bg-sifix-bg border border-white/[0.06] rounded-xl px-3 py-2.5 text-sm text-sifix-text placeholder:text-sifix-text-40 focus:outline-none focus:border-sifix-primary/40 transition-colors font-mono"
             />
             {input && (
-              <span className="absolute right-2.5 top-3 text-[10px] text-sifix-text-40">
-                {typeLabel}
+              <span className="absolute right-2.5 top-3 text-[10px] text-sifix-text-40 flex items-center gap-1">
+                <TypeIcon /> {inputType}
               </span>
             )}
           </div>
@@ -90,7 +97,9 @@ export function ScanPanel() {
       {/* Error */}
       {error && (
         <div className="sifix-card border-sifix-danger/20 bg-sifix-danger/5">
-          <p className="text-xs text-sifix-danger font-body">❌ {error}</p>
+          <p className="text-xs text-sifix-danger font-body flex items-center gap-2">
+            <span>✗</span> {error}
+          </p>
         </div>
       )}
 
@@ -151,10 +160,20 @@ export function ScanPanel() {
             )}
             {result.isScam !== undefined && (
               <div className={cn(
-                "mt-2 p-2.5 rounded-xl text-center text-xs font-semibold font-body",
+                "mt-2 p-2.5 rounded-xl text-center text-xs font-semibold font-body flex items-center justify-center gap-2",
                 result.isScam ? "bg-sifix-danger/10 text-sifix-danger border border-sifix-danger/20" : "bg-sifix-safe/10 text-sifix-safe border border-sifix-safe/20"
               )}>
-                {result.isScam ? "🚨 SCAM DETECTED" : "✅ NO THREATS FOUND"}
+                {result.isScam ? (
+                  <>
+                    <SifixIcon size={16} style={{ filter: "drop-shadow(0 0 4px #ef4444)" }} />
+                    <span>SCAM DETECTED</span>
+                  </>
+                ) : (
+                  <>
+                    <span>✓</span>
+                    <span>NO THREATS FOUND</span>
+                  </>
+                )}
               </div>
             )}
           </div>

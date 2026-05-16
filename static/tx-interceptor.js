@@ -26,13 +26,20 @@
     "eth_decrypt"
   ]
   var bridgeReady = false
+  var logoUrl = "" // Will be set via message from content script
 
   window.addEventListener("message", function (event) {
     if (event.source !== window) return
     if (event.data && event.data.type === "SIFIX_BRIDGE_READY") {
       bridgeReady = true
     }
+    if (event.data && event.data.type === "SIFIX_LOGO_URL") {
+      logoUrl = event.data.url
+    }
   })
+
+  // Request logo URL from content script
+  window.postMessage({ type: "SIFIX_REQUEST_LOGO_URL" }, "*")
 
   // ─── API Bridge (MAIN → ISOLATED content script → dApp API) ────
   function analyzeTx(tx) {
@@ -85,7 +92,8 @@
         '<style>' +
         '.sifix-card{background:linear-gradient(180deg,#0b0f14 0%,#0f172a 100%);border:1px solid rgba(148,163,184,0.18);border-radius:18px;padding:22px;max-width:460px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,0.55);color:#e2e8f0}' +
         '.sifix-brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}' +
-        '.sifix-logo{width:40px;height:40px;border-radius:12px;background:radial-gradient(circle at 30% 30%,#22d3ee,#1f2a44);display:flex;align-items:center;justify-content:center;color:#0b0f14;font-weight:700;font-size:16px}' +
+        '.sifix-logo{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden}' +
+        '.sifix-logo img{width:100%;height:100%;object-fit:contain}' +
         '.sifix-title{font-size:18px;font-weight:650;color:#f8fafc}' +
         '.sifix-sub{font-size:12px;color:#94a3b8;margin-top:2px}' +
         '.sifix-chip{font-size:11px;padding:4px 8px;border-radius:999px;background:rgba(34,211,238,0.12);color:#22d3ee;border:1px solid rgba(34,211,238,0.35)}' +
@@ -105,7 +113,7 @@
         '<div class="sifix-card">' +
         '<div class="sifix-brand">' +
         '<div style="display:flex;align-items:center;gap:10px">' +
-        '<div class="sifix-logo">S</div>' +
+        '<div class="sifix-logo">' + (logoUrl ? '<img src="' + logoUrl + '" alt="SIFIX" />' : '<div style="width:40px;height:40px;background:linear-gradient(135deg,#22d3ee,#0ea5e9);border-radius:12px"></div>') + '</div>' +
         '<div>' +
         '<div class="sifix-title">SIFIX Security Check</div>' +
         '<div class="sifix-sub">' + (isTx ? "Transaction detected" : "Signature request") + '</div>' +
@@ -181,7 +189,7 @@
       var isDanger = analysis.riskScore >= 60
       var isWarn = analysis.riskScore >= 40 && analysis.riskScore < 60
       var accent = isDanger ? "#ef4444" : isWarn ? "#f59e0b" : "#22c55e"
-      var icon = isDanger ? "\uD83D\uDED1" : isWarn ? "\u26A0\uFE0F" : "\u2705"
+      var logoUrl = chrome.runtime.getURL('assets/sifix-white.png')
       var title = isDanger ? "High Risk Detected!" : isWarn ? "Caution Advised" : "Transaction Looks Safe"
       var providerTag = analysis.provider === "0g-compute" ? '<span style="background:rgba(78,205,196,0.15);color:#4ecdc4;padding:4px 8px;border-radius:12px;font-size:10px">0G Compute</span>' : ""
       var threatsHtml = analysis.detectedThreats && analysis.detectedThreats.length
@@ -209,7 +217,7 @@
         '</style>' +
         '<div class="sifix-card">' +
         '<div style="text-align:center;margin-bottom:10px">' +
-        '<div style="width:40px;height:40px;margin:0 auto 8px;border-radius:12px;background:rgba(148,163,184,0.14);display:flex;align-items:center;justify-content:center;color:' + accent + ';font-weight:700">' + icon + '</div>' +
+        '<div style="width:48px;height:48px;margin:0 auto 8px;border-radius:12px;padding:8px;background:rgba(148,163,184,0.14);display:flex;align-items:center;justify-content:center"><img src="' + logoUrl + '" style="width:100%;height:100%;object-fit:contain" alt="SIFIX" /></div>' +
         '<div class="sifix-title">' + title + '</div>' +
         '<div class="sifix-sub">Risk assessment complete</div>' +
         '<div style="display:flex;justify-content:center;gap:8px;margin-top:8px">' +

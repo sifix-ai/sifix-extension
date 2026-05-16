@@ -115,7 +115,7 @@ function SifixBadge() {
     <div
       style={{
         position: "fixed",
-        top: "14px",
+        bottom: "14px",
         right: "14px",
         zIndex: 2147483646,
         background: "rgba(0, 0, 0, 0.88)",

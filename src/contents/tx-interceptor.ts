@@ -167,7 +167,7 @@ function showRiskModal(method: string, tx: TxRequest, analysis: AnalysisResult):
     const isWarn = analysis.riskScore >= 40 && analysis.riskScore < 60
     const accent = isDanger ? "#ef4444" : isWarn ? "#f59e0b" : "#22c55e"
     const bg = isDanger ? "linear-gradient(135deg,#1a0a0a,#2d1010)" : isWarn ? "linear-gradient(135deg,#1a1a0a,#2d2a10)" : "linear-gradient(135deg,#0a1a0a,#102d10)"
-    const icon = isDanger ? "\uD83D\uDED1" : isWarn ? "\u26A0\uFE0F" : "\u2705"
+    const logoUrl = chrome.runtime.getURL('assets/sifix-white.png')
     const title = isDanger ? "High Risk Transaction!" : isWarn ? "Proceed with Caution" : "Transaction Looks Safe"
     const valEth = tx.value ? (parseInt(tx.value, 16) / 1e18).toFixed(6) : ""
     const providerTag = analysis.provider === "0g-compute" ? '<span style="background:rgba(78,205,196,0.15);color:#4ecdc4;padding:4px 8px;border-radius:12px;font-size:10px">0G Compute</span>' : ""
@@ -200,7 +200,7 @@ function showRiskModal(method: string, tx: TxRequest, analysis: AnalysisResult):
       </style>
       <div class="sifix-card">
         <div style="text-align:center;margin-bottom:10px">
-          <div style="width:40px;height:40px;margin:0 auto 8px;border-radius:12px;background:rgba(148,163,184,0.14);display:flex;align-items:center;justify-content:center;color:${accent};font-weight:700">${icon}</div>
+          <div style="width:48px;height:48px;margin:0 auto 8px;border-radius:12px;padding:8px;background:rgba(148,163,184,0.14);display:flex;align-items:center;justify-content:center"><img src="${logoUrl}" style="width:100%;height:100%;object-fit:contain" alt="SIFIX" /></div>
           <div class="sifix-title">${title}</div>
           <div class="sifix-sub">Risk assessment complete</div>
           <div style="display:flex;justify-content:center;gap:8px;margin-top:8px">

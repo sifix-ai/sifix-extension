@@ -28,6 +28,10 @@ const DAPP_DOMAINS = [
   "metamask.io", "walletconnect.com", "safe.global",
   // 0G ecosystem
   "0g.ai", "zero.network",
+  // Testing & Development dApps
+  "metamask.github.io", "remix.ethereum.org", "etherscan.io",
+  "bscscan.com", "polygonscan.com", "arbiscan.io", "optimistic.etherscan.io",
+  "sepolia.etherscan.io", "goerli.etherscan.io",
 ]
 
 // URL path keywords that indicate a dApp
@@ -37,6 +41,7 @@ const DAPP_PATH_KEYWORDS = [
   "/vault", "/airdrop", "/dao", "/vote", "/governance",
   "/nft", "/marketplace", "/dapp", "/defi", "/yield",
   "/faucet", "/wrap", "/unwrap",
+  "/test-dapp", "/playground", "/demo", "/sandbox",
 ]
 
 /**
@@ -70,8 +75,21 @@ export function isDappUrl(url: string): boolean {
       hostname.includes("mint.") ||
       hostname.includes("dao.") ||
       hostname.includes("defi.") ||
-      hostname.includes("trade.")
+      hostname.includes("trade.") ||
+      hostname.includes("test.") ||
+      hostname.includes("demo.") ||
+      hostname.includes("playground.")
     ) {
+      return true
+    }
+
+    // 4. GitHub Pages with web3 keywords
+    if (hostname.endsWith(".github.io") && (
+      lowerPath.includes("dapp") ||
+      lowerPath.includes("web3") ||
+      lowerPath.includes("ethereum") ||
+      lowerPath.includes("test")
+    )) {
       return true
     }
 

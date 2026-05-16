@@ -78,11 +78,12 @@ function showOverlay(level: SafetyLevel, reason?: string) {
   `
   overlay.classList.add(isDanger ? "sifix-overlay-danger" : "sifix-overlay-warning")
 
-  // Shield icon SVG
-  const shieldSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
+  // SIFIX logo
+  const logoUrl = chrome.runtime.getURL('assets/sifix-white.png')
+  const logoHtml = `<img src="${logoUrl}" alt="SIFIX" style="width:18px;height:18px;object-fit:contain;filter:drop-shadow(0 0 4px ${accent})" />`
 
   overlay.innerHTML = `
-    <div style="flex-shrink:0; margin-top:1px">${shieldSvg}</div>
+    <div style="flex-shrink:0; margin-top:1px">${logoHtml}</div>
     <div style="flex:1; min-width:0; line-height:1.4">
       <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px">
         <span style="font-size:10px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:${accent}">

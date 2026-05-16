@@ -2,6 +2,7 @@ import type { TransactionRecord, TxStatus } from "../types"
 import { shortenAddress, formatTimestamp, formatEthValue } from "../utils/format"
 import { RISK_COLORS } from "../constants"
 import { cn } from "../utils/cn"
+import { SifixIcon } from "./SifixIcon"
 
 interface TransactionListProps {
   transactions: TransactionRecord[]
@@ -9,11 +10,19 @@ interface TransactionListProps {
   limit?: number
 }
 
-const statusConfig: Record<TxStatus, { icon: string; color: string; label: string }> = {
-  approved: { icon: "✅", color: "text-sifix-safe", label: "Approved" },
-  blocked: { icon: "🛡️", color: "text-sifix-danger", label: "Blocked" },
-  simulated: { icon: "🧪", color: "text-sifix-warn", label: "Simulated" },
-  pending: { icon: "⏳", color: "text-sifix-text-40", label: "Pending" },
+const statusConfig: Record<TxStatus, { iconType: "approved" | "blocked" | "simulated" | "pending"; color: string; label: string }> = {
+  approved: { iconType: "approved", color: "text-sifix-safe", label: "Approved" },
+  blocked: { iconType: "blocked", color: "text-sifix-danger", label: "Blocked" },
+  simulated: { iconType: "simulated", color: "text-sifix-warn", label: "Simulated" },
+  pending: { iconType: "pending", color: "text-sifix-text-40", label: "Pending" },
+}
+
+const StatusIcon = ({ type, className }: { type: string; className?: string }) => {
+  if (type === "approved") return <span className={className}>✓</span>
+  if (type === "blocked") return <SifixIcon size={14} className={className} />
+  if (type === "simulated") return <span className={className}>◉</span>
+  if (type === "pending") return <span className={className}>○</span>
+  return null
 }
 
 function TxItem({ tx }: { tx: TransactionRecord }) {
@@ -22,7 +31,7 @@ function TxItem({ tx }: { tx: TransactionRecord }) {
 
   return (
     <div className="flex items-start gap-2.5 py-2.5 border-b border-white/[0.04] last:border-0 animate-slide-up">
-      <span className="text-sm mt-0.5">{s.icon}</span>
+      <StatusIcon type={s.iconType} className="text-sm mt-0.5" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <span className={cn("text-xs font-semibold font-body", s.color)}>{s.label}</span>
@@ -63,7 +72,7 @@ export function TransactionList({ transactions, loading, limit }: TransactionLis
   if (!display.length) {
     return (
       <div className="sifix-card text-center py-8">
-        <span className="text-2xl">📭</span>
+        <SifixIcon size={32} className="mx-auto opacity-30" />
         <p className="text-xs text-sifix-text-60 mt-2 font-body">No transactions yet</p>
         <p className="text-[10px] text-sifix-text-40 mt-1">Transactions will appear when you interact with dApps</p>
       </div>

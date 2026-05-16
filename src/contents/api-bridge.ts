@@ -20,7 +20,7 @@ export const config: PlasmoCSConfig = {
 
 import { getApiBase, getToken } from "../lib/api"
 
-const DEFAULT_API = "http://localhost:3000/api/v1"
+const DEFAULT_API = process.env.PLASMO_PUBLIC_DAPP_API_URL ?? "http://localhost:3000/api/v1"
 
 interface TxRequest {
   from?: string
@@ -60,6 +60,18 @@ async function isProtectionEnabled(): Promise<boolean> {
 // Listen for analysis requests from MAIN world
 window.addEventListener("message", async (event) => {
   if (event.source !== window) return
+  
+  // Handle logo URL request
+  if (event.data?.type === "SIFIX_REQUEST_LOGO_URL") {
+    try {
+      const logoUrl = chrome.runtime.getURL('assets/sifix-white.png')
+      window.postMessage({ type: "SIFIX_LOGO_URL", url: logoUrl }, "*")
+    } catch (err) {
+      console.error("[SIFIX] Failed to get logo URL:", err)
+    }
+    return
+  }
+  
   if (event.data?.type !== "SIFIX_ANALYZE_TX") return
 
   const { requestId, tx } = event.data as { requestId: string; tx: TxRequest }

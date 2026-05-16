@@ -171,6 +171,7 @@ function Popup() {
   const accentColor = isDanger ? "#ef4444" : isWarning ? "#f59e0b" : !protecting ? "rgba(252,253,255,0.25)" : "#11ff99"
   const statusLabel = isDanger ? "Dangerous" : isWarning ? "Caution" : protecting ? "Protected" : "Paused"
   const glowClass = isDanger ? "glow-red" : isWarning ? "glow-red" : protecting ? "glow-green" : "glow-blue"
+  const logoUrl = chrome.runtime.getURL('assets/sifix-white.png')
 
   return (
     <div className="popup-container">
@@ -181,15 +182,22 @@ function Popup() {
         {/* Shield */}
         <div className="relative mb-3 mt-2">
           <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center"
+            className="w-14 h-14 rounded-2xl flex items-center justify-center p-3"
             style={{
               background: `linear-gradient(135deg, ${accentColor}20, ${accentColor}05)`,
               border: `1px solid ${accentColor}30`
             }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
+            <img 
+              src={logoUrl} 
+              alt="SIFIX" 
+              style={{ 
+                width: '100%', 
+                height: '100%', 
+                objectFit: 'contain',
+                filter: `drop-shadow(0 0 4px ${accentColor})`
+              }} 
+            />
           </div>
           {protecting && isSafe && (
             <div className="absolute inset-0 rounded-2xl animate-ping opacity-15" style={{ border: `2px solid ${accentColor}` }} />
@@ -279,10 +287,12 @@ function Popup() {
 // ══════════════════════════════════════════
 
 function BrandHeader() {
+  const logoUrl = chrome.runtime.getURL('assets/sifix-white.png')
+  
   return (
     <div className="flex items-center gap-2 mb-2">
-      <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #3b9eff, #3b9eff)" }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center p-1" style={{ background: "linear-gradient(135deg, #3b9eff, #3b9eff)" }}>
+        <img src={logoUrl} alt="SIFIX" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       </div>
       <span className="text-sm font-semibold text-ink tracking-tight">SIFIX</span>
       <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: "rgba(59, 158, 255, 0.1)", color: "#3b9eff" }}>v0.2</span>
@@ -291,11 +301,13 @@ function BrandHeader() {
 }
 
 function InactiveShield({ isInternal, domain }: { isInternal: boolean; domain: string }) {
+  const logoUrl = chrome.runtime.getURL('assets/sifix-white.png')
+  
   return (
     <div className="flex flex-col items-center mt-2">
       <div className="relative mb-4">
-        <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(252,253,255,0.25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center p-3" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <img src={logoUrl} alt="SIFIX" style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: 0.25 }} />
         </div>
       </div>
       <h2 className="text-sm font-semibold text-sifix-text-60 tracking-tight">{isInternal ? "No Active Page" : "Inactive"}</h2>

@@ -79,7 +79,8 @@ export const DEFAULT_SETTINGS = {
   protectionEnabled: true,
   autoBlockHighRisk: false,
   notifications: true,
-  dappApiUrl: process.env.PLASMO_PUBLIC_DAPP_API_URL || "http://localhost:3000/api/v1",
+  // Production API URL - change to localhost for development
+  dappApiUrl: "https://sifix.vercel.app/api/v1",
 }
 
 // ── Known Scam Domains (Local Blacklist) ─────────────

@@ -20,7 +20,8 @@ export const config: PlasmoCSConfig = {
 
 import { getApiBase, getToken } from "../lib/api"
 
-const DEFAULT_API = process.env.PLASMO_PUBLIC_DAPP_API_URL ?? "http://localhost:3000/api/v1"
+// Production API URL - change to localhost for development
+const DEFAULT_API = "https://sifix.vercel.app/api/v1"
 
 interface TxRequest {
   from?: string

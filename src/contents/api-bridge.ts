@@ -78,11 +78,13 @@ window.addEventListener("message", async (event) => {
 
   try {
     // Check if protection is enabled and token exists
-    const [apiBase, token, enabled] = await Promise.all([
-      getApiBaseSafe(),
-      getTokenSafe(),
+    const [enabled] = await Promise.all([
       isProtectionEnabled(),
     ])
+
+    // Get token from storage
+    const result = await chrome.storage.local.get(["sifix_token"])
+    const token = result.sifix_token
 
     if (!enabled || !token) {
       // Protection disabled or not authenticated — let tx through without analysis
@@ -103,34 +105,47 @@ window.addEventListener("message", async (event) => {
       return
     }
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    }
-
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`
-    }
-
-    const resp = await fetch(`${apiBase}/analyze`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
+    // Send to background service worker to avoid CORS
+    console.log("[SIFIX Bridge] Sending to background for analysis...")
+    
+    const response = await chrome.runtime.sendMessage({
+      type: "SIFIX_ANALYZE_TX_API",
+      tx: {
         from: tx.from,
         to: tx.to,
         data: tx.data,
         value: tx.value,
         method: tx.method,
         typedData: tx.typedData,
-      }),
+      },
     })
 
-    const result = await resp.json()
+    console.log("[SIFIX Bridge] Analysis response from background:", response)
+
+    if (!response) {
+      console.error("[SIFIX Bridge] No response from background!")
+      window.postMessage({
+        type: "SIFIX_ANALYSIS_RESULT",
+        requestId,
+        result: {
+          success: false,
+          riskLevel: "UNKNOWN",
+          riskScore: 0,
+          confidence: 0,
+          recommendation: "PROCEED",
+          explanation: "No response from background service",
+          detectedThreats: [],
+          error: "no_response"
+        },
+      }, "*")
+      return
+    }
 
     // Send result back to MAIN world
     window.postMessage({
       type: "SIFIX_ANALYSIS_RESULT",
       requestId,
-      result,
+      result: response,
     }, "*")
   } catch (err: any) {
     window.postMessage({

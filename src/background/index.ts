@@ -101,6 +101,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false
     }
 
+    // ─── Transaction Analysis (CORS-free) ───────────────────────
+    case "SIFIX_ANALYZE_TX_API": {
+      handleAnalyzeTx(message.tx)
+        .then(sendResponse)
+        .catch((err) => sendResponse({
+          success: false,
+          riskLevel: "UNKNOWN",
+          riskScore: 0,
+          confidence: 0,
+          recommendation: "PROCEED",
+          explanation: "Analysis failed: " + err.message,
+          detectedThreats: [],
+          error: err.message,
+        }))
+      return true
+    }
+
     // ─── Domain Safety ───────────────────────
     case MSG.CHECK_DAPP: {
       handleCheckDapp(message.url)
@@ -186,6 +203,110 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false
   }
 })
+
+// ═════════════════════════════════════════════════════
+// TRANSACTION ANALYSIS (CORS-free from background)
+// ═════════════════════════════════════════════════════
+
+async function handleAnalyzeTx(tx: any) {
+  const token = await getToken()
+  const apiBase = await getApiBase()
+
+  console.log("[SIFIX BG] Analyzing transaction:", { apiBase, hasToken: !!token, tx })
+
+  if (!token) {
+    return {
+      success: false,
+      riskLevel: "UNKNOWN",
+      riskScore: 0,
+      confidence: 0,
+      recommendation: "PROCEED",
+      explanation: "Not authenticated",
+      detectedThreats: [],
+      error: "no_token",
+    }
+  }
+
+  try {
+    const url = `${apiBase}/analyze`
+    console.log("[SIFIX BG] Fetching:", url)
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        from: tx.from,
+        to: tx.to,
+        data: tx.data,
+        value: tx.value,
+        method: tx.method,
+        typedData: tx.typedData,
+      }),
+    })
+
+    console.log("[SIFIX BG] Response status:", resp.status, resp.statusText)
+
+    if (!resp.ok) {
+      const errorText = await resp.text()
+      console.error("[SIFIX BG] API error response:", errorText)
+      throw new Error(`API error: ${resp.status} ${resp.statusText}`)
+    }
+
+    const result = await resp.json()
+    console.log("[SIFIX BG] API result:", result)
+
+    // Handle different response formats
+    const data = result.data || result
+    
+    // Ensure success field exists
+    if (typeof data.success === 'undefined') {
+      data.success = true // Assume success if not specified
+    }
+
+    // Map API recommendation to expected format
+    // API returns: "ALLOW" | "WARN" | "BLOCK"
+    // Code expects: "PROCEED" | "REVIEW" | "BLOCK"
+    if (data.recommendation === "ALLOW") {
+      data.recommendation = "PROCEED"
+    } else if (data.recommendation === "WARN") {
+      data.recommendation = "REVIEW"
+    }
+
+    // Ensure detectedThreats is array (API returns "threats")
+    if (!data.detectedThreats && data.threats) {
+      data.detectedThreats = data.threats
+    }
+
+    // Map reasoning to explanation (API uses "reasoning", code expects "explanation")
+    if (!data.explanation && data.reasoning) {
+      data.explanation = data.reasoning
+    }
+
+    // Clean up duplicate threats (API has nested duplicates)
+    if (Array.isArray(data.detectedThreats)) {
+      // Take only first 5 unique threats to avoid overwhelming UI
+      const uniqueThreats = [...new Set(data.detectedThreats)]
+      data.detectedThreats = uniqueThreats.slice(0, 5)
+    }
+
+    return data
+  } catch (err: any) {
+    console.error("[SIFIX BG] Analysis API error:", err)
+    return {
+      success: false,
+      riskLevel: "UNKNOWN",
+      riskScore: 0,
+      confidence: 0,
+      recommendation: "PROCEED",
+      explanation: "Analysis failed: " + err.message,
+      detectedThreats: [],
+      error: err.message,
+    }
+  }
+}
 
 // ═════════════════════════════════════════════════════
 // DOMAIN SAFETY CHECK

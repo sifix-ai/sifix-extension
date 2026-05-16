@@ -45,22 +45,31 @@
   function analyzeTx(tx) {
     return new Promise(function (resolve) {
       if (!bridgeReady) {
+        console.log("[SIFIX] Bridge not ready!")
         resolve({ success: false, riskLevel: "UNKNOWN", riskScore: 0, confidence: 0, recommendation: "PROCEED", explanation: "Bridge not ready. Reload the page and ensure the extension content script is active.", detectedThreats: [], error: "bridge_not_ready" })
         return
       }
 
       var id = "sifix_" + Date.now() + "_" + Math.random().toString(36).slice(2)
+      console.log("[SIFIX] Sending analysis request with ID:", id)
+      
       var handler = function (e) {
-        if (e.data && e.data.type === "SIFIX_ANALYSIS_RESULT" && e.data.requestId === id) {
-          window.removeEventListener("message", handler)
-          resolve(e.data.result)
+        if (e.data && e.data.type === "SIFIX_ANALYSIS_RESULT") {
+          console.log("[SIFIX] Received SIFIX_ANALYSIS_RESULT:", e.data.requestId, "expected:", id)
+          if (e.data.requestId === id) {
+            console.log("[SIFIX] Request ID matches! Resolving with result")
+            window.removeEventListener("message", handler)
+            resolve(e.data.result)
+          }
         }
       }
       window.addEventListener("message", handler)
       window.postMessage({ type: "SIFIX_ANALYZE_TX", requestId: id, tx: tx }, "*")
+      
       setTimeout(function () {
+        console.log("[SIFIX] Analysis timeout after 30s for request:", id)
         window.removeEventListener("message", handler)
-        resolve({ success: false, riskLevel: "UNKNOWN", riskScore: 0, confidence: 0, recommendation: "PROCEED", explanation: "Analysis timed out", detectedThreats: [] })
+        resolve({ success: false, riskLevel: "UNKNOWN", riskScore: 0, confidence: 0, recommendation: "PROCEED", explanation: "Analysis timed out", detectedThreats: [], error: "timeout" })
       }, 30000)
     })
   }
@@ -181,15 +190,76 @@
     return function () { el.remove() }
   }
 
+  // ─── Show error modal ──────────────────────────────
+  function showError(title, message, details) {
+    return new Promise(function (resolve) {
+      document.getElementById("sifix-popup") && document.getElementById("sifix-popup").remove()
+
+      var overlay = document.createElement("div")
+      overlay.id = "sifix-popup"
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(5,8,12,0.86);backdrop-filter:blur(12px);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:'Sora','Space Grotesk','Inter',ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif"
+      overlay.innerHTML =
+        '<style>' +
+        '.sifix-card{background:linear-gradient(180deg,#0b0f14 0%,#0f172a 100%);border:1px solid rgba(239,68,68,0.3);border-radius:18px;padding:22px;max-width:460px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,0.55);color:#e2e8f0}' +
+        '.sifix-title{font-size:18px;font-weight:650;color:#f8fafc;margin:0}' +
+        '.sifix-sub{font-size:12px;color:#94a3b8;margin-top:2px}' +
+        '.sifix-panel{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:12px;margin-top:12px}' +
+        '.sifix-actions{display:flex;gap:10px;margin-top:14px}' +
+        '.sifix-btn{padding:12px 16px;border-radius:12px;border:1px solid #1f2a44;font-weight:600;font-size:13px;cursor:pointer;flex:1}' +
+        '.sifix-btn-primary{background:#ef4444;border-color:#ef4444;color:#fff}' +
+        '.sifix-btn-ghost{background:transparent;color:#cbd5e1}' +
+        '.sifix-footer{margin-top:12px;font-size:10px;color:#64748b;text-align:center}' +
+        '</style>' +
+        '<div class="sifix-card">' +
+        '<div style="text-align:center;margin-bottom:10px">' +
+        '<div style="width:48px;height:48px;margin:0 auto 8px;border-radius:12px;padding:8px;background:rgba(239,68,68,0.14);display:flex;align-items:center;justify-content:center">' +
+        '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+        '</div>' +
+        '<div class="sifix-title">' + title + '</div>' +
+        '<div class="sifix-sub">Analysis could not be completed</div>' +
+        '</div>' +
+
+        '<div class="sifix-panel">' +
+        '<div style="font-size:12px;line-height:1.6;color:#fca5a5">' + message + '</div>' +
+        (details ? '<div style="font-size:11px;color:#64748b;margin-top:8px;font-family:monospace">' + details + '</div>' : '') +
+        '</div>' +
+
+        '<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:10px;padding:10px;margin-top:12px">' +
+        '<div style="color:#fbbf24;font-size:11px;line-height:1.5">⚠️ You can proceed without analysis, but this is not recommended. The transaction has not been verified for safety.</div>' +
+        '</div>' +
+
+        '<div class="sifix-actions">' +
+        '<button id="sifix-cancel-err" class="sifix-btn sifix-btn-ghost">Cancel Transaction</button>' +
+        '<button id="sifix-proceed-err" class="sifix-btn sifix-btn-primary">Proceed Anyway</button>' +
+        '</div>' +
+        '<div class="sifix-footer">Protected by SIFIX x 0G Security Agent</div>' +
+        '</div>'
+
+      document.documentElement.appendChild(overlay)
+      console.log("[SIFIX] Error modal displayed")
+
+      document.getElementById("sifix-cancel-err").onclick = function () { 
+        console.log("[SIFIX] User cancelled after error")
+        overlay.remove(); 
+        resolve(false) 
+      }
+      document.getElementById("sifix-proceed-err").onclick = function () { 
+        console.log("[SIFIX] User proceeded despite error")
+        overlay.remove(); 
+        resolve(true) 
+      }
+    })
+  }
+
   // ─── Show analysis result ──────────────────────────────
   function showResult(method, tx, analysis) {
+    console.log("[SIFIX] showResult called with:", { method, tx, analysis })
     return new Promise(function (resolve) {
       document.getElementById("sifix-popup") && document.getElementById("sifix-popup").remove()
 
       var isDanger = analysis.riskScore >= 60
       var isWarn = analysis.riskScore >= 40 && analysis.riskScore < 60
       var accent = isDanger ? "#ef4444" : isWarn ? "#f59e0b" : "#22c55e"
-      var logoUrl = chrome.runtime.getURL('assets/sifix-white.png')
       var title = isDanger ? "High Risk Detected!" : isWarn ? "Caution Advised" : "Transaction Looks Safe"
       var providerTag = analysis.provider === "0g-compute" ? '<span style="background:rgba(78,205,196,0.15);color:#4ecdc4;padding:4px 8px;border-radius:12px;font-size:10px">0G Compute</span>' : ""
       var threatsHtml = analysis.detectedThreats && analysis.detectedThreats.length
@@ -198,6 +268,13 @@
       var storageHtml = analysis.storageHash
         ? '<div style="background:rgba(78,205,196,0.08);border:1px solid rgba(78,205,196,0.2);border-radius:10px;padding:12px;margin-bottom:16px"><span style="color:#4ecdc4;font-weight:600;font-size:13px">&#x1F517; Evidence stored on 0G Storage</span><div style="color:#64748b;font-size:11px;margin-top:4px;font-family:monospace">' + analysis.storageHash.slice(0, 24) + '...</div></div>'
         : ""
+
+      console.log("[SIFIX] Modal data:", { isDanger, isWarn, accent, title, threatsCount: analysis.detectedThreats?.length })
+
+      console.log("[SIFIX] Modal data:", { isDanger, isWarn, accent, title, threatsCount: analysis.detectedThreats?.length })
+
+      // Use logoUrl from global variable (set via message from api-bridge)
+      var logoSrc = logoUrl || ""
 
       var overlay = document.createElement("div")
       overlay.id = "sifix-popup"
@@ -217,7 +294,9 @@
         '</style>' +
         '<div class="sifix-card">' +
         '<div style="text-align:center;margin-bottom:10px">' +
-        '<div style="width:48px;height:48px;margin:0 auto 8px;border-radius:12px;padding:8px;background:rgba(148,163,184,0.14);display:flex;align-items:center;justify-content:center"><img src="' + logoUrl + '" style="width:100%;height:100%;object-fit:contain" alt="SIFIX" /></div>' +
+        '<div style="width:48px;height:48px;margin:0 auto 8px;border-radius:12px;padding:8px;background:rgba(148,163,184,0.14);display:flex;align-items:center;justify-content:center">' +
+        (logoSrc ? '<img src="' + logoSrc + '" style="width:100%;height:100%;object-fit:contain" alt="SIFIX" />' : '<div style="width:100%;height:100%;background:linear-gradient(135deg,#22d3ee,#0ea5e9);border-radius:8px"></div>') +
+        '</div>' +
         '<div class="sifix-title">' + title + '</div>' +
         '<div class="sifix-sub">Risk assessment complete</div>' +
         '<div style="display:flex;justify-content:center;gap:8px;margin-top:8px">' +
@@ -241,9 +320,18 @@
         '</div>'
 
       document.documentElement.appendChild(overlay)
+      console.log("[SIFIX] Result modal displayed")
 
-      document.getElementById("sifix-cancel2").onclick = function () { overlay.remove(); resolve(false) }
-      document.getElementById("sifix-proceed2").onclick = function () { overlay.remove(); resolve(true) }
+      document.getElementById("sifix-cancel2").onclick = function () { 
+        console.log("[SIFIX] User clicked Cancel")
+        overlay.remove(); 
+        resolve(false) 
+      }
+      document.getElementById("sifix-proceed2").onclick = function () { 
+        console.log("[SIFIX] User clicked Proceed")
+        overlay.remove(); 
+        resolve(true) 
+      }
     })
   }
 
@@ -294,28 +382,77 @@
             var analysis = await analyzeTx(tx)
             hideLoading()
 
-            if (!analysis.success || analysis.error) {
-              var err2 = new Error("Analysis unavailable (" + (analysis.error || "unknown_error") + "). Request blocked.")
+            console.log("[SIFIX] Analysis result:", analysis)
+
+            // Check if analysis has required fields
+            if (!analysis) {
+              console.error("[SIFIX] Analysis is null/undefined")
+              var err2 = new Error("Analysis unavailable (no_response). Request blocked.")
               err2.code = 4900
               err2.source = "sifix"
               throw err2
             }
 
-            var proceed = await showResult(method, tx, analysis)
-            if (!proceed) {
-              var err3 = new Error("Transaction blocked by SIFIX")
-              err3.code = 4900
-              err3.source = "sifix"
-              throw err3
+            // If success field is missing, check for error field only
+            var hasError = analysis.error && analysis.error !== "no_token" && analysis.error !== "protection_disabled"
+            var isSuccess = analysis.success !== false && !hasError
+
+            console.log("[SIFIX] Analysis validation:", { 
+              hasSuccess: analysis.success, 
+              hasError: !!analysis.error,
+              isSuccess: isSuccess 
+            })
+
+            if (!isSuccess) {
+              console.error("[SIFIX] Analysis failed:", analysis)
+              
+              // Show error modal instead of blocking
+              var errorTitle = "Analysis Failed"
+              var errorMessage = "Unable to analyze transaction: " + (analysis.error || analysis.explanation || "Unknown error")
+              var errorDetails = analysis.error || ""
+              
+              var proceedAnyway = await showError(errorTitle, errorMessage, errorDetails)
+              if (!proceedAnyway) {
+                var err2b = new Error("Transaction cancelled by user after analysis failure")
+                err2b.code = 4900
+                err2b.source = "sifix"
+                throw err2b
+              }
+              // User chose to proceed anyway, continue to wallet
+            } else {
+              // Analysis successful, show result
+              console.log("[SIFIX] Showing result modal...")
+              var proceed = await showResult(method, tx, analysis)
+              console.log("[SIFIX] User decision:", proceed ? "PROCEED" : "CANCEL")
+              
+              if (!proceed) {
+                var err3 = new Error("Transaction blocked by SIFIX")
+                err3.code = 4900
+                err3.source = "sifix"
+                throw err3
+              }
             }
           } catch (e) {
             hideLoading()
+            
+            // If user already cancelled, just throw
             if (e && (e.code === 4900 || e.source === "sifix")) throw e
-            console.error("[SIFIX] Analysis/interceptor error (blocked):", e && e.message ? e.message : e)
-            var err4 = new Error("SIFIX interceptor error. Request blocked.")
-            err4.code = 4900
-            err4.source = "sifix"
-            throw err4
+            
+            // Otherwise show error modal
+            console.error("[SIFIX] Analysis/interceptor error:", e && e.message ? e.message : e)
+            
+            var errorTitle = "Analysis Error"
+            var errorMessage = "An unexpected error occurred during analysis: " + (e && e.message ? e.message : "Unknown error")
+            var errorDetails = e && e.stack ? e.stack.split('\n')[0] : ""
+            
+            var proceedAnyway = await showError(errorTitle, errorMessage, errorDetails)
+            if (!proceedAnyway) {
+              var err4 = new Error("Transaction cancelled by user after error")
+              err4.code = 4900
+              err4.source = "sifix"
+              throw err4
+            }
+            // User chose to proceed anyway
           }
         }
 

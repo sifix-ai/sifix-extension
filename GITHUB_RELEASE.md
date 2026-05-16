@@ -1,8 +1,8 @@
 # 🛡️ SIFIX Extension v0.2.0
 
-**AI-Powered Wallet Security for Web3**
+**Intercept-first wallet security for Web3**
 
-Protect your crypto transactions with real-time AI analysis powered by SIFIX and 0G Network.
+Protect wallet actions with intercept-first analysis powered by SIFIX, 0G Chain, 0G Compute, 0G Storage, and 0G Agentic ID.
 
 ---
 
